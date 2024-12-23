@@ -207,7 +207,7 @@ public class HelperService extends Service {
 
         // 创建通知构建器
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(getString(R.string.app_name))
                 .setContentText("点我切换运行状态")
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
