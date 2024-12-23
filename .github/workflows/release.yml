@@ -31,7 +31,7 @@ jobs:
 
       # Step 5: Upload the APK as a release artifact (上传 APK 文件)
       - name: Upload APK
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: app-release
           path: app/build/outputs/apk/release/app-release.apk  # 根据你的项目路径调整
