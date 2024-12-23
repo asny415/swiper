@@ -38,8 +38,9 @@ import io.github.muntashirakon.adb.AdbStream;
 import io.github.muntashirakon.adb.LocalServices;
 
 public class HelperService extends Service {
+    public static boolean running = false;
     private static final String CHANNEL_ID = "my_service_channel";
-    private static final int NOTIFICATION_ID = 1;
+    public static final int NOTIFICATION_ID = 1;
     private static final String ACTION_SMART = "ACTION_SMART";
     private final ExecutorService executor = Executors.newFixedThreadPool(3);
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
@@ -64,7 +65,7 @@ public class HelperService extends Service {
                 commandOutput.postValue(sb);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.e("TEST", "Error reading output", e);
         }
     };
 
@@ -85,7 +86,7 @@ public class HelperService extends Service {
                     os.write("\n".getBytes(StandardCharsets.UTF_8));
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                Log.e("TEST", "Error executing command", e);
             }
         });
     }
@@ -119,7 +120,7 @@ public class HelperService extends Service {
 
     private void connect2adb() {
         executor.submit(() -> {
-            AbsAdbConnectionManager manager = null;
+            AbsAdbConnectionManager manager;
             try {
                 manager = AdbConnectionManager.getInstance(getApplication());
                 boolean connected = false;
@@ -129,7 +130,7 @@ public class HelperService extends Service {
                     } catch (AdbPairingRequiredException e) {
                         return;
                     } catch (Throwable th) {
-                        th.printStackTrace();
+                       Log.e("TEST", "Error connecting to ADB", th);
                     }
                 }
                 if (!connected) {
@@ -168,11 +169,13 @@ public class HelperService extends Service {
     }
 
     private void clearSingleTask() {
-        if (!scheduledFuture.isDone()) {
+        if (scheduledFuture != null && !scheduledFuture.isDone()) {
             scheduledFuture.cancel(true);
         }
-        showToast("停止滑动");
-        scheduledFuture = null;
+        scheduledFuture = scheduler.schedule(() -> {
+            showToast("停止滑动");
+            scheduledFuture = null;
+        }, 3000, TimeUnit.MILLISECONDS);
     }
 
 
@@ -195,6 +198,7 @@ public class HelperService extends Service {
         clearSingleTask();
         // 移除通知
         stopForeground(true);
+        running = false;
     }
 
     private void createNotification() {
@@ -217,6 +221,7 @@ public class HelperService extends Service {
 
         // 启动前台服务
         startForeground(NOTIFICATION_ID, notification);
+        running = true;
     }
 
     private void createNotificationChannel() {

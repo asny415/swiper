@@ -74,8 +74,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        viewModel?.checkNotifyReady()
         viewModel?.autoConnect()
-        viewModel?.checkServiceRunning()
     }
 }
 

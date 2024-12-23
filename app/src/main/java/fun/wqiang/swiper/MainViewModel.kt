@@ -1,9 +1,9 @@
 package `fun`.wqiang.swiper
 
-import android.app.ActivityManager
 import android.app.Application
-import android.content.Context
 import android.os.Build
+import android.service.notification.StatusBarNotification
+import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -99,22 +99,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun checkServiceRunning() {
-        val activityManager = getApplication<App>().getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        val processes = activityManager.runningAppProcesses
-        for (processInfo in processes) {
-            if (processInfo.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE &&
-                processInfo.processName == "fun.wqiang.swiper") {
-                running.postValue(true)
-                return
-            }
-        }
-        running.postValue(false)
-    }
-
     fun autoConnect() {
         executor.submit {
             autoConnectInternal()
         }
+    }
+
+    fun checkNotifyReady() {
+            val notificationManager: NotificationManagerCompat =
+                NotificationManagerCompat.from(getApplication())
+            val activeNotifications: MutableList<StatusBarNotification> =
+                notificationManager.activeNotifications
+
+            val notificationId = HelperService.NOTIFICATION_ID
+
+            var isNotificationVisible = false
+        for (n in  activeNotifications) {
+            if (n.id == notificationId) {
+                isNotificationVisible = true
+                break
+            }
+        }
+    running.postValue(isNotificationVisible)
     }
 }
