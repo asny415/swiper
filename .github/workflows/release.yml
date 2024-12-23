@@ -16,25 +16,31 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Build with Gradle
-        run: ./gradlew assembleRelease
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      # Step 3: Cache Gradle dependencies to speed up the build
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v2
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
-      - name: Upload Release Asset
-        id: upload-release-asset 
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # Step 4: Build the APK (添加签名命令)
+      - name: Build APK
+        run: ./gradlew assembleRelease  # 你可以使用 assembleRelease 或其他自定义的构建命令
+
+      # Step 5: Upload the APK as a release artifact (上传 APK 文件)
+      - name: Upload APK
+        uses: actions/upload-artifact@v2
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the Create Release step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: app/build/outputs/apk/release/swiper-${{ github.ref_name }}.apk
-          asset_name: swiper-${{ github.ref_name }}.apk
-          asset_content_type: application/vnd.android.package-archive
+          name: app-release
+          path: app/build/outputs/apk/release/app-release.apk  # 根据你的项目路径调整
+
+      # Step 6: Create GitHub Release
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: app/build/outputs/apk/release/app-release.apk  # 上传 APK 到 GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 使用 GitHub 默认提供的 token 来创建 release
+
