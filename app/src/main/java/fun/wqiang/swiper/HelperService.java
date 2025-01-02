@@ -42,6 +42,7 @@ public class HelperService extends Service {
     private static final String CHANNEL_ID = "my_service_channel";
     public static final int NOTIFICATION_ID = 1;
     private static final String ACTION_SMART = "ACTION_SMART";
+    private static final String ACTION_STOP = "ACTION_STOP";
     private final ExecutorService executor = Executors.newFixedThreadPool(3);
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private static ScheduledFuture<?> scheduledFuture;
@@ -152,13 +153,15 @@ public class HelperService extends Service {
         Log.d("TEST", String.format("************ start command with action: %s %b", intent.getAction(), scheduledFuture == null));
 
         if (ACTION_SMART.equals(intent.getAction())) {
-            Log.d("TEST", "start");
             if (scheduledFuture == null) {
                 connect2adb();
                 taskSingleRound();
             } else {
                 clearSingleTask();
             }
+        } else if (ACTION_STOP.equals(intent.getAction())) {
+            stopForeground(true);
+            stopSelf();
         } else {
             Log.d("TEST", "action not match");
             createNotification();
@@ -169,6 +172,7 @@ public class HelperService extends Service {
     }
 
     private void clearSingleTask() {
+        Log.d("TEST", "clearSingleTask");
         if (scheduledFuture != null && !scheduledFuture.isDone()) {
             scheduledFuture.cancel(true);
         }
@@ -209,6 +213,10 @@ public class HelperService extends Service {
         play.setAction(HelperService.ACTION_SMART);
         PendingIntent playIntent = PendingIntent.getService(this, 0, play, PendingIntent.FLAG_IMMUTABLE);
 
+        Intent stop = new Intent(this, HelperService.class);
+        stop.setAction(HelperService.ACTION_STOP);
+        PendingIntent stopIntent = PendingIntent.getService(this, 0, stop, PendingIntent.FLAG_IMMUTABLE);
+
         // 创建通知构建器
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.mipmap.ic_launcher)
@@ -217,6 +225,8 @@ public class HelperService extends Service {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(playIntent)
                 .setOngoing(true) // 设置通知为常驻
+                .setAutoCancel(false)
+                .addAction(android.R.drawable.ic_delete, "停止服务", stopIntent)
                 .build();
 
         // 启动前台服务
