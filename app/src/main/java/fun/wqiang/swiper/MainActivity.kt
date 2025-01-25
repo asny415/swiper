@@ -4,12 +4,14 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,9 +21,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -33,16 +39,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.core.app.ActivityCompat.finishAffinity
 import androidx.core.content.ContextCompat
 import androidx.javascriptengine.JavaScriptSandbox
 import `fun`.wqiang.swiper.ui.theme.SwiperTheme
-
+import org.json.JSONObject
+import android.util.Base64
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 
 class MainActivity : ComponentActivity() {
     private var viewModel: MainViewModel? = null
@@ -57,7 +68,6 @@ class MainActivity : ComponentActivity() {
             SwiperTheme {
                 var connected by remember { mutableStateOf(false) }
                 var running by remember { mutableStateOf(false) }
-                var pairCode by remember { mutableStateOf("") }
                 var pairPort by remember { mutableStateOf("") }
                 viewModel!!.connected.observe(this) {
                     connected = it
@@ -70,7 +80,14 @@ class MainActivity : ComponentActivity() {
                 }
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Greeting(
-                        vm = GreetingDataModel(connected, running, pairPort, onShowDialog = {
+                        vm = GreetingDataModel(connected, pairPort, scripts = listOf(),
+                            onClickItem ={ item ->
+                                val intent = Intent(this, HelperService::class.java)
+                                intent.putExtra("script", item.getString("code"))
+                                startService(intent)
+                                viewModel!!.showNotification(this)
+                            },
+                            onShowDialog = {
                             viewModel!!.getPairingPort()
                         }, onPair = { port, pairCode ->
                             viewModel!!.pair(port, pairCode)
@@ -103,28 +120,17 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun Greeting(vm:GreetingDataModel, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
     var showDialog by remember { mutableStateOf(false) }
     var pairCode by remember { mutableStateOf("") }
     Box(contentAlignment = Alignment.Center, modifier=modifier.fillMaxSize()){
         Column {
-            if (vm.connected && !vm.running) {
-                Button(onClick = {
-                    val intent = Intent(context, HelperService::class.java)
-                    intent.putExtra("script", "function logic(code) { return JSON.stringify({opt:'pass'}); }")
-                    context.startService(intent)
-                    finishAffinity(context as ComponentActivity)
-                }) {
-                    Text("开启服务")
-                }
-            }
-            else if (vm.running) {
-                Button(onClick = {
-                    val intent = Intent(context, HelperService::class.java)
-                    context.stopService(intent)
-                    finishAffinity(context as ComponentActivity)
-                }) {
-                    Text("停止服务")
+            if (vm.connected) {
+                LazyColumn(modifier=modifier.fillMaxSize()) {
+                    items(vm.scripts) { item ->
+                        MyListItem(item, onClick = {
+                            vm.onClickItem(item)
+                        })
+                    }
                 }
             } else {
                 Button(onClick = {
@@ -173,6 +179,41 @@ fun Greeting(vm:GreetingDataModel, modifier: Modifier = Modifier) {
 @Composable
 fun GreetingPreview() {
     SwiperTheme {
-        Greeting(GreetingDataModel(connected = false, running = false, pairPort = "1234" ))
+        Greeting(GreetingDataModel(connected = true, pairPort = "1234", scripts = listOf("""{
+            |"name":"支付宝视频脚本",
+            |"package": "test.test.test",
+            |"desc":"这是一个测试脚本",
+            |"icon":""
+            |}""".trimMargin()).map { script -> JSONObject(script) }))
+    }
+}
+
+fun base64ToImageBitmap(base64String: String): ImageBitmap {
+    return try {
+        val decodedBytes: ByteArray = Base64.decode(base64String, Base64.DEFAULT)
+        val bitmap: Bitmap = BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+        bitmap.asImageBitmap()
+    } catch (e: Exception) {
+        e.printStackTrace()
+        base64ToImageBitmap("iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==")
+    }
+}
+
+@Composable
+fun MyListItem(item: JSONObject, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.padding(16.dp).clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Image(
+            bitmap = base64ToImageBitmap(item.getString("icon")),
+            contentDescription = null,
+            modifier = Modifier.size(48.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column {
+            Text(text = item.getString("name"), style = MaterialTheme.typography.titleMedium)
+            Text(text = item.getString("desc"), style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }

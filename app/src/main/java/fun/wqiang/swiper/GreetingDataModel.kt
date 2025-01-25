@@ -1,6 +1,10 @@
 package `fun`.wqiang.swiper
 
-class GreetingDataModel(val connected: Boolean, val running: Boolean,
+import org.json.JSONObject
+
+class GreetingDataModel(val connected: Boolean,
                         var pairPort: String,
+                        val scripts: List<JSONObject>,
+                        val onClickItem: (item: JSONObject) -> Unit = {},
                         val onShowDialog: () -> Unit = {}, val onPair: (port: Int, pairCode: String) -> Unit = { _, _ -> }) {
 }

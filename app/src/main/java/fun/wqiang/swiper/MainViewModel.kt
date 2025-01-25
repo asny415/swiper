@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-    var jsSupported: Boolean = false;
+    var jsSupported: Boolean = false
     private val executor = Executors.newFixedThreadPool(3)
     val running = MutableLiveData<Boolean>()
     val connected = MutableLiveData<Boolean>()
