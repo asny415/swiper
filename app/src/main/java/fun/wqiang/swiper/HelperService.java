@@ -20,6 +20,8 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.lifecycle.MutableLiveData;
 
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -69,6 +71,8 @@ public class HelperService extends Service {
             Log.e("TEST", "Error reading output", e);
         }
     };
+    private JsHelper jshelper;
+    private String script;
 
     public void execute(String command) {
         executor.submit(() -> {
@@ -96,6 +100,7 @@ public class HelperService extends Service {
     public void onCreate() {
         super.onCreate();
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        jshelper = new JsHelper(this);
     }
 
     private void taskSingleRound() {
@@ -154,8 +159,16 @@ public class HelperService extends Service {
 
         if (ACTION_SMART.equals(intent.getAction())) {
             if (scheduledFuture == null) {
-                connect2adb();
-                taskSingleRound();
+                String result = jshelper.executeJavaScript("const param='';\n" + script + "\nlogic(param)");
+                try {
+                    JSONObject jsonObject = new JSONObject(result);
+                    Log.d("TEST", "result: " + result);
+                    Log.d("TEST", "opt: " + jsonObject.getString("opt"));
+                } catch (Exception e) {
+                    Log.e("TEST", "Error parsing JSON", e);
+                }
+//                connect2adb();
+//                taskSingleRound();
             } else {
                 clearSingleTask();
             }
@@ -163,6 +176,7 @@ public class HelperService extends Service {
             stopForeground(true);
             stopSelf();
         } else {
+            script = intent.getStringExtra("script");
             Log.d("TEST", "action not match");
             createNotification();
         }
@@ -200,6 +214,7 @@ public class HelperService extends Service {
         // 在这里处理服务的销毁逻辑，例如停止线程
         // ...
         clearSingleTask();
+        jshelper.close();
         // 移除通知
         stopForeground(true);
         running = false;
@@ -235,14 +250,12 @@ public class HelperService extends Service {
     }
 
     private void createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
                     "滑动通知",
                     NotificationManager.IMPORTANCE_HIGH
             );
             notificationManager.createNotificationChannel(channel);
-        }
     }
 }
 

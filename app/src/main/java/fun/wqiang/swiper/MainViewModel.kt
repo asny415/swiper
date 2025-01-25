@@ -1,8 +1,14 @@
 package `fun`.wqiang.swiper
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.service.notification.StatusBarNotification
+import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
@@ -18,12 +24,71 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
+    var jsSupported: Boolean = false;
     private val executor = Executors.newFixedThreadPool(3)
     val running = MutableLiveData<Boolean>()
     val connected = MutableLiveData<Boolean>()
     private val paired = MutableLiveData<Boolean>()
     private val needPair = MutableLiveData<Boolean>()
     private val pairPort = MutableLiveData<Int>()
+    private val CHANNEL_ID: String = "my_service_channel"
+    private val NOTIFICATION_ID: Int = 1
+
+
+    private fun createActivityIntent(context: Context): Intent {
+        // 创建一个 Intent，用于启动目标 Activity
+        val intent = Intent(context, MainActivity::class.java)
+        // 可以添加一些额外的参数
+        intent.putExtra("key", "value")
+        // 设置启动模式
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        return intent
+    }
+
+    private fun createActivityPendingIntent(context: Context): PendingIntent {
+        val intent = createActivityIntent(context)
+        // 创建一个 PendingIntent，用于启动 Activity
+        val pendingIntent: PendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.getActivity(
+                context,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            )
+        } else {
+            PendingIntent.getActivity(
+                context,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT
+            )
+        }
+        return pendingIntent
+    }
+
+    fun showNotification(context: Context) {
+        val pendingIntent = createActivityPendingIntent(context)
+
+        // 创建一个通知
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(context.getString(R.string.app_name))
+            .setContentText("点我快速返回")
+            .setContentIntent(pendingIntent) // 设置 PendingIntent
+            .setAutoCancel(true) // 点击后自动取消
+
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "滑动通知",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+
+
+        notificationManager.notify(NOTIFICATION_ID, builder.build())
+    }
 
     fun watchPairingPort(): LiveData<Int> {
         return pairPort

@@ -1,11 +1,15 @@
 package `fun`.wqiang.swiper
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,23 +40,41 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.app.ActivityCompat.finishAffinity
 import androidx.core.content.ContextCompat
+import androidx.javascriptengine.JavaScriptSandbox
 import `fun`.wqiang.swiper.ui.theme.SwiperTheme
-import android.Manifest
-import android.annotation.SuppressLint
-import androidx.activity.result.contract.ActivityResultContracts
+
 
 class MainActivity : ComponentActivity() {
-    private var viewModel:MainViewModel? = null
+    private var viewModel: MainViewModel? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        viewModel = MainViewModel(application)
         requestPermissionLauncher()
+        viewModel = MainViewModel(application)
+        viewModel!!.jsSupported = JavaScriptSandbox.isSupported()
         setContent {
             SwiperTheme {
+                var connected by remember { mutableStateOf(false) }
+                var running by remember { mutableStateOf(false) }
+                var pairCode by remember { mutableStateOf("") }
+                var pairPort by remember { mutableStateOf("") }
+                viewModel!!.connected.observe(this) {
+                    connected = it
+                }
+                viewModel!!.running.observe(this) {
+                    running = it
+                }
+                viewModel!!.watchPairingPort().observe(this) { port ->
+                    pairPort = if (port != -1) "$port" else ""
+                }
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Greeting(
-                        viewModel,
+                        vm = GreetingDataModel(connected, running, pairPort, onShowDialog = {
+                            viewModel!!.getPairingPort()
+                        }, onPair = { port, pairCode ->
+                            viewModel!!.pair(port, pairCode)
+                        }),
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -74,37 +96,29 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        viewModel?.checkNotifyReady()
-        viewModel?.autoConnect()
+        viewModel!!.checkNotifyReady()
+        viewModel!!.autoConnect()
     }
 }
 
 @Composable
-fun Greeting(viewModel: MainViewModel?, modifier: Modifier = Modifier) {
+fun Greeting(vm:GreetingDataModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var showDialog by remember { mutableStateOf(false) }
     var pairCode by remember { mutableStateOf("") }
-    var pairPort by remember { mutableStateOf("") }
-    var connected by remember { mutableStateOf(false) }
-    var running by remember { mutableStateOf(false) }
-    viewModel?.connected?.observe(context as ComponentActivity) {
-        connected = it
-    }
-    viewModel?.running?.observe(context as ComponentActivity) {
-        running = it
-    }
     Box(contentAlignment = Alignment.Center, modifier=modifier.fillMaxSize()){
         Column {
-            if (connected && !running) {
+            if (vm.connected && !vm.running) {
                 Button(onClick = {
                     val intent = Intent(context, HelperService::class.java)
+                    intent.putExtra("script", "function logic(code) { return JSON.stringify({opt:'pass'}); }")
                     context.startService(intent)
                     finishAffinity(context as ComponentActivity)
                 }) {
                     Text("开启服务")
                 }
             }
-            else if (running) {
+            else if (vm.running) {
                 Button(onClick = {
                     val intent = Intent(context, HelperService::class.java)
                     context.stopService(intent)
@@ -122,11 +136,7 @@ fun Greeting(viewModel: MainViewModel?, modifier: Modifier = Modifier) {
                     Dialog(
                         onDismissRequest = { showDialog=false },
                     ) {
-                        viewModel?.watchPairingPort()?.observe(context as ComponentActivity) { port ->
-                            pairPort = if (port != -1) "$port" else ""
-
-                        }
-                        viewModel?.getPairingPort()
+                        vm.onShowDialog()
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -137,13 +147,13 @@ fun Greeting(viewModel: MainViewModel?, modifier: Modifier = Modifier) {
                             // 对话框内容
                             Column{
                                 OutlinedTextField(value = pairCode, onValueChange = {pairCode = it}, label={Text("验证码")},keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                                OutlinedTextField(value = pairPort, onValueChange = {pairPort = it}, label={Text("端口号")},keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                                OutlinedTextField(value = vm.pairPort, onValueChange = {vm.pairPort = it}, label={Text("端口号")},keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                                 Spacer(modifier = Modifier.padding(16.dp))
                                 Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                                     Button(onClick = {
-                                        if (pairCode.isNotEmpty() && pairPort.isNotEmpty()) {
-                                            val port = pairPort.toInt()
-                                            viewModel?.pair(port, pairCode)
+                                        if (pairCode.isNotEmpty() && vm.pairPort.isNotEmpty()) {
+                                            val port = vm.pairPort.toInt()
+                                            vm.onPair(port, pairCode)
                                             showDialog = false
                                         }
                                     }) {
@@ -163,6 +173,6 @@ fun Greeting(viewModel: MainViewModel?, modifier: Modifier = Modifier) {
 @Composable
 fun GreetingPreview() {
     SwiperTheme {
-        Greeting(null)
+        Greeting(GreetingDataModel(connected = false, running = false, pairPort = "1234" ))
     }
 }

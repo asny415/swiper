@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "fun.wqiang.swiper"
-        minSdk = 24
+        minSdk = 26
         35.also { targetSdk = it }
         versionCode = 2
         versionName = "1.1"
@@ -47,6 +47,8 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.javascriptengine)
+    implementation(libs.guava)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.appcompat)

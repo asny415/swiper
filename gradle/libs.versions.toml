@@ -1,7 +1,9 @@
 [versions]
 activityKtx = "1.9.3"
 agp = "8.7.3"
+guava = "32.1.2-android"
 hiddenapibypass = "4.3"
+javascriptengine = "1.0.0-beta01"
 kotlin = "2.0.0"
 coreKtx = "1.15.0"
 junit = "4.13.2"
@@ -18,7 +20,9 @@ lifecycleProcess = "2.8.7"
 [libraries]
 androidx-activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activityKtx" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-javascriptengine = { module = "androidx.javascriptengine:javascriptengine", version.ref = "javascriptengine" }
 androidx-runtime-livedata = { module = "androidx.compose.runtime:runtime-livedata" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
 hiddenapibypass = { module = "org.lsposed.hiddenapibypass:hiddenapibypass", version.ref = "hiddenapibypass" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
