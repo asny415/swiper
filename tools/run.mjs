@@ -135,12 +135,14 @@ if (!sessionId) {
 
 const ctx = {};
 while (true) {
+  console.log(new Date(), "开始截屏...");
   const pageres = await fetch(
     `http://127.0.0.1:8200/session/${sessionId}/source`
   );
   const pagejson = await pageres.json();
   const xml = pagejson.value;
   const nodes = parseNodesFromXml(xml);
+  console.log(new Date(), "截屏成功，节点数：", nodes.length);
   const filePath = join(process.env.HOME, "Desktop", "node.json");
   writeFileSync(filePath, JSON.stringify(nodes, null, 2));
   console.log(`Nodes written to ${filePath}`);

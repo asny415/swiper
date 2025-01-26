@@ -80,7 +80,7 @@ export function logic(ctx, nodes) {
           x2 = width / 2 + Math.random() * 30 - 15,
           y2 = (height * 1) / 4 + Math.random() * 100 - 50;
         const duration = Math.random() * 100 - 50 + 600;
-        const delay = Math.random() * 3000 + 4000;
+        const delay = Math.random() * 3000 + 3000;
         if (ctx.lastSwipe && new Date().getTime() - ctx.lastSwipe < delay) {
           return {
             opts: [{ opt: "sleep", reason: "等待", params: { ms: 500 } }],
