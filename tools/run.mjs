@@ -2,6 +2,7 @@ import * as alipay from "../app/src/main/assets/scripts/alipay.mjs";
 import { execSync } from "child_process";
 import { writeFileSync } from "fs";
 import { join } from "path";
+import { spawn } from "child_process";
 
 const modules = { alipay };
 const moduleName = process.argv[2];
@@ -32,7 +33,7 @@ try {
 
 function parseNodesFromXml(xml) {
   const json = [];
-  const regex = /<node[^>]*\/?>/g;
+  const regex = /<android.widget.[^ ]*[^>]*\/?>/g;
   let match;
   while ((match = regex.exec(xml)) !== null) {
     const nodeString = match[0];
@@ -49,51 +50,96 @@ function parseNodesFromXml(xml) {
 
 const deviceId = deviceLines[0].split("\t")[0];
 console.log("启动运行", module.name, deviceId);
+
+try {
+  execSync(
+    `adb -s ${deviceId} shell monkey -p ${module.pkg} -c android.intent.category.LAUNCHER 1`,
+    {
+      stdio: "ignore",
+    }
+  );
+  console.log(`${module.pkg} launched successfully.`);
+} catch (error) {
+  console.error(`Failed to launch ${module.package}:`, error.message);
+  process.exit(1);
+}
+
+execSync(`adb -s ${deviceId} forward tcp:8200 tcp:6790`);
+
+execSync(
+  `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server`
+);
+execSync(
+  `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server.test`
+);
+
+process.on("SIGINT", () => {
+  console.log("Caught interrupt signal, cleaning up...");
+  execSync(`adb -s ${deviceId} forward --remove tcp:8200`);
+  execSync(
+    `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server`
+  );
+  execSync(
+    `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server.test`
+  );
+  process.exit();
+});
+
+const proxy = spawn("adb", [
+  "-s",
+  deviceId,
+  "shell",
+  "am",
+  "instrument",
+  "-w",
+  "-e",
+  "disableAnalytics",
+  "true",
+  "io.appium.uiautomator2.server.test/androidx.test.runner.AndroidJUnitRunner",
+]);
+proxy.stdout.on("data", (data) => {
+  console.log(`proxy stdout: ${data}`);
+});
+proxy.stderr.on("data", (data) => {
+  console.error(`proxy stderr: ${data}`);
+});
+proxy.on("close", (code) => {
+  console.log(`proxy exited with code ${code}`);
+});
+
+await new Promise((r) => setTimeout(r, 5000));
+
+const res = await fetch(`http://127.0.0.1:8200/session`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    capabilities: {
+      firstMatch: [
+        {
+          platformName: "Android",
+          automationName: "UiAutomator2",
+        },
+      ],
+    },
+  }),
+});
+const json = await res.json();
+console.log(json);
+const sessionId = json.value.sessionId;
+if (!sessionId) {
+  console.log("创建session失败");
+  process.exit(0);
+}
+
 const ctx = {};
 while (true) {
-  try {
-    execSync(`adb -s ${deviceId} shell rm /sdcard/window_dump.xml`, {
-      stdio: "ignore",
-    });
-  } catch (error) {
-    //这是正常的如果文件已经不存在
-  }
-  try {
-    const result = execSync(
-      `adb -s ${deviceId} shell ls /sdcard/window_dump.xml`
-    ).toString();
-    if (result.includes("/sdcard/window_dump.xml")) {
-      console.log("/sdcard/window_dump.xml exists. Exiting.");
-      process.exit(0);
-    }
-  } catch (error) {
-    if (!error.message.includes("No such file or directory")) {
-      console.error("Failed to check /sdcard/window_dump.xml:", error.message);
-      process.exit(0);
-    }
-  }
-
-  try {
-    execSync(
-      `adb -s ${deviceId} shell uiautomator dump /sdcard/window_dump.xml`,
-      {
-        stdio: "ignore",
-      }
-    );
-  } catch (error) {
-    console.error("Failed to dump window information:", error.message);
-  }
-
-  let xml;
-  try {
-    xml = execSync(
-      `adb -s ${deviceId} shell cat /sdcard/window_dump.xml`
-    ).toString();
-    console.log("XML content retrieved successfully.");
-  } catch (error) {
-    console.error("Failed to retrieve XML content:", error.message);
-  }
-
+  const pageres = await fetch(
+    `http://127.0.0.1:8200/session/${sessionId}/source`
+  );
+  const pagejson = await pageres.json();
+  const xml = pagejson.value;
   const nodes = parseNodesFromXml(xml);
   const filePath = join(process.env.HOME, "Desktop", "node.json");
   writeFileSync(filePath, JSON.stringify(nodes, null, 2));
@@ -126,6 +172,10 @@ async function runOpt(deviceId, opration) {
         stdio: "ignore",
       }
     );
+  } else if (opt === "back") {
+    execSync(`adb -s ${deviceId} shell input keyevent 4`, {
+      stdio: "ignore",
+    });
   } else if (opt === "sleep") {
     const { ms } = params;
     await new Promise((r) => setTimeout(r, ms));
