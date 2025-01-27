@@ -156,9 +156,9 @@ while (true) {
   const xml = pagejson.value;
   const nodes = parseNodesFromXml(xml);
   console.log(new Date(), "截屏成功，节点数：", nodes.length);
-  const filePath = join(process.env.HOME, "Desktop", "node.json");
-  writeFileSync(filePath, JSON.stringify(nodes, null, 2));
-  console.log(`Nodes written to ${filePath}`);
+  // const filePath = join(process.env.HOME, "Desktop", "node.json");
+  // writeFileSync(filePath, JSON.stringify(nodes, null, 2));
+  // console.log(`Nodes written to ${filePath}`);
   const { opts, ...others } = module.logic(ctx, nodes);
   Object.assign(ctx, others);
   for (const opt of opts) {
