@@ -10,6 +10,10 @@ import java.util.concurrent.Executors;
 
 import io.github.muntashirakon.adb.AbsAdbConnectionManager;
 
+/**
+ * HOW to Pair
+ * adb shell am broadcast -a "fun.wqiang.swiper.pair" -n fun.wqiang.swiper/.PairReceiver --es "code" "629840" --ei "port" 37719
+ */
 public class PairReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
