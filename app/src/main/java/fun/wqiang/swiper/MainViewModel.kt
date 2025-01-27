@@ -53,9 +53,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val scriptsList = mutableListOf<JSONObject>()
         Handler(Looper.getMainLooper()).postDelayed(Runnable {
             for ((fileName, content) in mjsScripts) {
-                val txt = (application as App).jsHelper!!.executeJavaScript(content.replace("export ","")+"\n JSON.stringify({name, description, pkg, icon:''})")
+                val code = content.replace("export ","")
+                val txt = (application as App).jsHelper!!.executeJavaScript("$code\n JSON.stringify({name, description, pkg, icon:''})")
                 Log.d("*** 脚本执行结果 ***", "$fileName:$txt")
                 val obj = JSONObject(txt)
+                obj.put("code", code)
                 val pkg = obj.getString("pkg")
                 val icon= getApplicationIcon(application, pkg)
                 if (icon != null) {

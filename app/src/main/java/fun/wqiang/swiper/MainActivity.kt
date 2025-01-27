@@ -84,9 +84,9 @@ class MainActivity : ComponentActivity() {
                     Greeting(
                         vm = GreetingDataModel(true, pairPort, scripts = scripts,
                             onClickItem ={ item ->
-//                                val intent = Intent(this, HelperService::class.java)
-//                                intent.putExtra("script", item.getString("code"))
-//                                startService(intent)
+                                val intent = Intent(this, HelperService::class.java)
+                                intent.putExtra("script", item.getString("code"))
+                                startService(intent)
                                 viewModel!!.showNotification(this)
                             },
                             onShowDialog = {
