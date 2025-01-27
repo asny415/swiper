@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
                 viewModel!!.watchScripts().observe(this) { scripts = it }
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Greeting(
-                        vm = GreetingDataModel(true, pairPort, scripts = scripts,
+                        vm = GreetingDataModel(connected, pairPort, scripts = scripts,
                             onClickItem ={ item ->
                                 val intent = Intent(this, HelperService::class.java)
                                 intent.putExtra("script", item.getString("code"))
