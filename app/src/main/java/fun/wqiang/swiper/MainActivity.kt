@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -41,7 +40,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -51,6 +49,7 @@ import androidx.javascriptengine.JavaScriptSandbox
 import `fun`.wqiang.swiper.ui.theme.SwiperTheme
 import org.json.JSONObject
 import android.util.Base64
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -69,7 +68,9 @@ class MainActivity : ComponentActivity() {
                 var connected by remember { mutableStateOf(false) }
                 var running by remember { mutableStateOf(false) }
                 var pairPort by remember { mutableStateOf("") }
+                var scripts by remember { mutableStateOf(listOf<JSONObject>()) }
                 viewModel!!.connected.observe(this) {
+                    Log.d("TEST", "connected: $it")
                     connected = it
                 }
                 viewModel!!.running.observe(this) {
@@ -78,13 +79,14 @@ class MainActivity : ComponentActivity() {
                 viewModel!!.watchPairingPort().observe(this) { port ->
                     pairPort = if (port != -1) "$port" else ""
                 }
+                viewModel!!.watchScripts().observe(this) { scripts = it }
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Greeting(
-                        vm = GreetingDataModel(connected, pairPort, scripts = listOf(),
+                        vm = GreetingDataModel(true, pairPort, scripts = scripts,
                             onClickItem ={ item ->
-                                val intent = Intent(this, HelperService::class.java)
-                                intent.putExtra("script", item.getString("code"))
-                                startService(intent)
+//                                val intent = Intent(this, HelperService::class.java)
+//                                intent.putExtra("script", item.getString("code"))
+//                                startService(intent)
                                 viewModel!!.showNotification(this)
                             },
                             onShowDialog = {
@@ -182,7 +184,7 @@ fun GreetingPreview() {
         Greeting(GreetingDataModel(connected = true, pairPort = "1234", scripts = listOf("""{
             |"name":"支付宝视频脚本",
             |"package": "test.test.test",
-            |"desc":"这是一个测试脚本",
+            |"description":"这是一个测试脚本",
             |"icon":""
             |}""".trimMargin()).map { script -> JSONObject(script) }))
     }
@@ -213,7 +215,7 @@ fun MyListItem(item: JSONObject, onClick: () -> Unit) {
         Spacer(modifier = Modifier.width(16.dp))
         Column {
             Text(text = item.getString("name"), style = MaterialTheme.typography.titleMedium)
-            Text(text = item.getString("desc"), style = MaterialTheme.typography.bodyMedium)
+            Text(text = item.getString("description"), style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

@@ -69,7 +69,7 @@ export function logic(ctx, nodes) {
   }
 
   {
-    const card = nodes.find((node) => node.text.endsWith("请进行验证"));
+    const card = nodes.find((node) => `${node.text}`.endsWith("请进行验证"));
     if (card) {
       const [x, y] = JSON.parse(`${card.bounds.split("][")[0]}]`);
       return {
