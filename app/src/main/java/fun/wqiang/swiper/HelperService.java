@@ -71,7 +71,6 @@ public class HelperService extends Service {
             Log.e("TEST", "Error reading output", e);
         }
     };
-    private JsHelper jshelper;
     private String script;
 
     public void execute(String command) {
@@ -100,7 +99,6 @@ public class HelperService extends Service {
     public void onCreate() {
         super.onCreate();
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        jshelper = new JsHelper(this);
     }
 
     private void taskSingleRound() {
@@ -156,30 +154,40 @@ public class HelperService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d("TEST", String.format("************ start command with action: %s %b", intent.getAction(), scheduledFuture == null));
-
-        if (ACTION_SMART.equals(intent.getAction())) {
-            if (scheduledFuture == null) {
-                String result = jshelper.executeJavaScript("const param='';\n" + script + "\nlogic(param)");
-                try {
-                    JSONObject jsonObject = new JSONObject(result);
-                    Log.d("TEST", "result: " + result);
-                    Log.d("TEST", "opt: " + jsonObject.getString("opt"));
-                } catch (Exception e) {
-                    Log.e("TEST", "Error parsing JSON", e);
-                }
-//                connect2adb();
-//                taskSingleRound();
-            } else {
-                clearSingleTask();
-            }
-        } else if (ACTION_STOP.equals(intent.getAction())) {
-            stopForeground(true);
-            stopSelf();
-        } else {
-            script = intent.getStringExtra("script");
-            Log.d("TEST", "action not match");
-            createNotification();
+        String code = intent.getStringExtra("script");
+        JsHelper jsHelper = ((App) getApplication()).getJsHelper();
+        if (jsHelper != null) {
+           String pkg =  jsHelper.executeJavaScript(code + "\n" + "pkg");
+           Log.d("TEST", "GOT PACKAGE on service: " + pkg);
         }
+
+//        if (scheduledFuture == null) {
+//
+//        }
+
+//        if (ACTION_SMART.equals(intent.getAction())) {
+//            if (scheduledFuture == null) {
+//                String result = jshelper.executeJavaScript("const param='';\n" + script + "\nlogic(param)");
+//                try {
+//                    JSONObject jsonObject = new JSONObject(result);
+//                    Log.d("TEST", "result: " + result);
+//                    Log.d("TEST", "opt: " + jsonObject.getString("opt"));
+//                } catch (Exception e) {
+//                    Log.e("TEST", "Error parsing JSON", e);
+//                }
+////                connect2adb();
+////                taskSingleRound();
+//            } else {
+//                clearSingleTask();
+//            }
+//        } else if (ACTION_STOP.equals(intent.getAction())) {
+//            stopForeground(true);
+//            stopSelf();
+//        } else {
+//            script = intent.getStringExtra("script");
+//            Log.d("TEST", "action not match");
+//            createNotification();
+//        }
 
         // 返回 START_STICKY 或 START_NOT_STICKY，以控制服务的重启行为
         return START_NOT_STICKY;
@@ -214,7 +222,6 @@ public class HelperService extends Service {
         // 在这里处理服务的销毁逻辑，例如停止线程
         // ...
         clearSingleTask();
-        jshelper.close();
         // 移除通知
         stopForeground(true);
         running = false;

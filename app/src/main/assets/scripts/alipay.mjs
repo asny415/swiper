@@ -89,7 +89,9 @@ export function logic(ctx, nodes) {
   {
     if (nodes[0].package == "com.eg.android.AlipayGphone") {
       const targetcard = nodes.find((node) => node.text === "发现");
-      const entrycard = nodes.find((node) => node.text === "视频");
+      const entrycard = nodes.find(
+        (node) => node.text === "视频" || node.text === "更新"
+      );
       if (targetcard) {
         const values = `[${nodes[0].bounds.split("][")[1]}`;
         const [width, height] = JSON.parse(values);
