@@ -5,7 +5,16 @@ import { join } from "path";
 import { spawn } from "child_process";
 
 const modules = { alipay };
-const moduleName = process.argv[2];
+const args = process.argv;
+let targetDevice = "";
+for (let i = 0; i < args.length; i++) {
+  if (args[i] == "-s") {
+    targetDevice = args[i + 1];
+    args.splice(i, 2);
+    break;
+  }
+}
+const moduleName = args.slice(-1)[0];
 const module = modules[moduleName];
 
 if (!module) {
@@ -13,22 +22,26 @@ if (!module) {
   process.exit(1);
 }
 
-let deviceLines;
-try {
-  const adbDevicesOutput = execSync("adb devices").toString();
-  deviceLines = adbDevicesOutput
-    .split("\n")
-    .filter((line) => line.includes("\tdevice"));
+let deviceId = targetDevice;
+if (!deviceId) {
+  let deviceLines;
+  try {
+    const adbDevicesOutput = execSync("adb devices").toString();
+    deviceLines = adbDevicesOutput
+      .split("\n")
+      .filter((line) => line.includes("\tdevice"));
 
-  if (deviceLines.length !== 1) {
-    console.error(
-      "ADB is not running or there is not exactly one device online."
-    );
+    if (deviceLines.length !== 1) {
+      console.error(
+        "ADB is not running or there is not exactly one device online."
+      );
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error("Failed to run adb command:", error.message);
     process.exit(1);
   }
-} catch (error) {
-  console.error("Failed to run adb command:", error.message);
-  process.exit(1);
+  deviceId = deviceLines[0].split("\t")[0];
 }
 
 function parseNodesFromXml(xml) {
@@ -48,7 +61,6 @@ function parseNodesFromXml(xml) {
   return json;
 }
 
-const deviceId = deviceLines[0].split("\t")[0];
 console.log("启动运行", module.name, deviceId);
 
 try {
@@ -64,7 +76,8 @@ try {
   process.exit(1);
 }
 
-execSync(`adb -s ${deviceId} forward tcp:8200 tcp:6790`);
+const localPort = 8000 + Math.floor(Math.random() * 1000);
+execSync(`adb -s ${deviceId} forward tcp:${localPort} tcp:6790`);
 
 execSync(
   `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server`
@@ -75,7 +88,7 @@ execSync(
 
 process.on("SIGINT", () => {
   console.log("Caught interrupt signal, cleaning up...");
-  execSync(`adb -s ${deviceId} forward --remove tcp:8200`);
+  execSync(`adb -s ${deviceId} forward --remove tcp:${localPort}`);
   execSync(
     `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server`
   );
@@ -109,7 +122,7 @@ proxy.on("close", (code) => {
 
 await new Promise((r) => setTimeout(r, 5000));
 
-const res = await fetch(`http://127.0.0.1:8200/session`, {
+const res = await fetch(`http://127.0.0.1:${localPort}/session`, {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
@@ -137,7 +150,7 @@ const ctx = {};
 while (true) {
   console.log(new Date(), "开始截屏...");
   const pageres = await fetch(
-    `http://127.0.0.1:8200/session/${sessionId}/source`
+    `http://127.0.0.1:${localPort}/session/${sessionId}/source`
   );
   const pagejson = await pageres.json();
   const xml = pagejson.value;
