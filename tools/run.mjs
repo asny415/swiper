@@ -5,15 +5,21 @@ import { join } from "path";
 import { spawn } from "child_process";
 
 const modules = { alipay };
-const args = process.argv;
+let args = process.argv;
 let targetDevice = "";
+let saveHistory = false;
 for (let i = 0; i < args.length; i++) {
   if (args[i] == "-s") {
     targetDevice = args[i + 1];
-    args.splice(i, 2);
-    break;
+    args[i] = "";
+    args[i + 1] = "";
+  }
+  if (args[i] == "--save-history") {
+    saveHistory = true;
+    args[i] = "";
   }
 }
+args = args.filter((arg) => arg);
 const moduleName = args.slice(-1)[0];
 const module = modules[moduleName];
 
@@ -156,9 +162,10 @@ while (true) {
   const xml = pagejson.value;
   const nodes = parseNodesFromXml(xml);
   console.log(new Date(), "截屏成功，节点数：", nodes.length);
-  // const filePath = join(process.env.HOME, "Desktop", "node.json");
-  // writeFileSync(filePath, JSON.stringify(nodes, null, 2));
-  // console.log(`Nodes written to ${filePath}`);
+  if (saveHistory) {
+    const filePath = join(process.cwd(), `node.${new Date()}.json`);
+    writeFileSync(filePath, JSON.stringify(nodes, null, 2));
+  }
   const { opts, ...others } = module.logic(ctx, nodes);
   Object.assign(ctx, others);
   for (const opt of opts) {

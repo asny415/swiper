@@ -69,6 +69,24 @@ export function logic(ctx, nodes) {
   }
 
   {
+    const card = nodes.find((node) => node.text.endsWith("请进行验证"));
+    if (card) {
+      const [x, y] = JSON.parse(`${card.bounds.split("][")[0]}]`);
+      return {
+        opts: [
+          {
+            opt: "sleep",
+            reason: "等待人工验证",
+            params: {
+              ms: 1000,
+            },
+          },
+        ],
+      };
+    }
+  }
+
+  {
     if (nodes[0].package == "com.eg.android.AlipayGphone") {
       const targetcard = nodes.find((node) => node.text === "发现");
       const entrycard = nodes.find((node) => node.text === "视频");
