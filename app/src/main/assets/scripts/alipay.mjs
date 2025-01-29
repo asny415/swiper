@@ -133,6 +133,7 @@ export function logic(ctx, nodes) {
         };
       } else {
         const unknown = (ctx.unknown || 0) + 1;
+        console.log("unknow but unknown is", unknown);
         if (unknown > 1) {
           return {
             unknown,

@@ -200,7 +200,7 @@ async function runOpt(deviceId, opration) {
     });
   } else if (opt === "sleep") {
     if (reason == "等待人工验证") {
-      require("child_process").execSync('say "需要验证"');
+      execSync('say "需要验证"');
     }
     const { ms } = params;
     await new Promise((r) => setTimeout(r, ms));
