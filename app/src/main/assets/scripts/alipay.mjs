@@ -71,7 +71,6 @@ export function logic(ctx, nodes) {
   {
     const card = nodes.find((node) => `${node.text}`.endsWith("请进行验证"));
     if (card) {
-      const [x, y] = JSON.parse(`${card.bounds.split("][")[0]}]`);
       return {
         opts: [
           {
@@ -109,6 +108,7 @@ export function logic(ctx, nodes) {
         console.log("上次滑动间隔:", new Date().getTime() - ctx.lastSwipe);
         return {
           lastSwipe: new Date().getTime(),
+          unknown: 0,
           opts: [
             {
               opt: "swipe",
@@ -132,14 +132,18 @@ export function logic(ctx, nodes) {
           ],
         };
       } else {
-        return {
-          opts: [
-            {
-              opt: "back",
-              reason: "是不是进直播了，按一下返回吧",
-            },
-          ],
-        };
+        const unknown = (ctx.unknown || 0) + 1;
+        if (unknown > 1) {
+          return {
+            unknown,
+            opts: [
+              {
+                opt: "back",
+                reason: "是不是进直播了，按一下返回吧",
+              },
+            ],
+          };
+        }
       }
     }
   }
