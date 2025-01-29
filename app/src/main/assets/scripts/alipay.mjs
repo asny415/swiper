@@ -74,8 +74,24 @@ export function logic(ctx, nodes) {
       return {
         opts: [
           {
-            opt: "sleep",
+            opt: "say",
             reason: "等待人工验证",
+            params: {
+              ms: 1000,
+            },
+          },
+        ],
+      };
+    }
+  }
+  {
+    const card = nodes.find((node) => `${node.text}`.endsWith("明日可领"));
+    if (card) {
+      return {
+        opts: [
+          {
+            opt: "say",
+            reason: "今天任务完成",
             params: {
               ms: 1000,
             },

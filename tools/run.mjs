@@ -198,10 +198,8 @@ async function runOpt(deviceId, opration) {
     execSync(`adb -s ${deviceId} shell input keyevent 4`, {
       stdio: "ignore",
     });
-  } else if (opt === "sleep") {
-    if (reason == "等待人工验证") {
-      execSync('say "需要验证"');
-    }
+  } else if (opt === "say") {
+    execSync(`say "${reason}"`);
     const { ms } = params;
     await new Promise((r) => setTimeout(r, ms));
   } else {
