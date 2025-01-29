@@ -136,13 +136,17 @@ export function logic(ctx, nodes) {
         console.log("unknow but unknown is", unknown);
         if (unknown > 1) {
           return {
-            unknown,
             opts: [
               {
                 opt: "back",
                 reason: "是不是进直播了，按一下返回吧",
               },
             ],
+          };
+        } else {
+          return {
+            unknown,
+            opts: [{ opt: "sleep", reason: "等等再说", params: { ms: 500 } }],
           };
         }
       }
