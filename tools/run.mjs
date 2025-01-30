@@ -99,7 +99,7 @@ while (true) {
   console.log(new Date(), "开始截屏...");
   unlinkSync("screen.png");
   execSync(`adb -s ${deviceId} exec-out screencap -p > screen.png`);
-  const result = execSync(`python ocr.py screen.png`);
+  const result = execSync(`vision-ocr screen.png`);
 
   const nodes = result
     .toString()
