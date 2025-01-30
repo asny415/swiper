@@ -90,11 +90,8 @@ export function logic(ctx, nodes) {
       return {
         opts: [
           {
-            opt: "say",
-            reason: "今天任务完成",
-            params: {
-              ms: 1000,
-            },
+            opt: "finish",
+            params: {},
           },
         ],
       };

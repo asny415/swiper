@@ -92,8 +92,7 @@ execSync(
   `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server.test`
 );
 
-process.on("SIGINT", () => {
-  console.log("Caught interrupt signal, cleaning up...");
+async function clear() {
   execSync(`adb -s ${deviceId} forward --remove tcp:${localPort}`);
   execSync(
     `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server`
@@ -101,7 +100,19 @@ process.on("SIGINT", () => {
   execSync(
     `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server.test`
   );
+}
+
+process.on("SIGINT", async () => {
+  console.log("Caught interrupt signal, cleaning up...");
+  await clear();
   process.exit();
+});
+
+process.on("uncaughtException", async (err) => {
+  console.error("Uncaught Exception:", err);
+  await clear();
+  execSync(`say "程序异常退出"`);
+  process.exit(1);
 });
 
 const proxy = spawn("adb", [
@@ -198,6 +209,10 @@ async function runOpt(deviceId, opration) {
     execSync(`adb -s ${deviceId} shell input keyevent 4`, {
       stdio: "ignore",
     });
+  } else if (opt === "finish") {
+    execSync(`say "任务完成"`);
+    await clear();
+    process.exit(0);
   } else if (opt === "sleep") {
     const { ms } = params;
     await new Promise((r) => setTimeout(r, ms));
