@@ -96,13 +96,17 @@ execSync(
 );
 
 async function clear() {
-  execSync(`adb -s ${deviceId} forward --remove tcp:${localPort}`);
-  execSync(
-    `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server`
-  );
-  execSync(
-    `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server.test`
-  );
+  try {
+    execSync(`adb -s ${deviceId} forward --remove tcp:${localPort}`);
+    execSync(
+      `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server`
+    );
+    execSync(
+      `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server.test`
+    );
+  } catch (err) {
+    //skip
+  }
 }
 
 process.on("SIGINT", async () => {
