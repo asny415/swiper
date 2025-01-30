@@ -94,7 +94,6 @@ while (true) {
     const filePath = join(process.cwd(), `node.${new Date()}.json`);
     writeFileSync(filePath, JSON.stringify(screen, null, 2));
   }
-  console.log(screen);
   const { opts, ...others } = module.logic(
     { ...ctx, width: screen.imageWidth, height: screen.imageHeight },
     screen.results

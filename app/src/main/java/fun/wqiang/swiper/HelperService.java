@@ -7,6 +7,9 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Rect;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.Looper;
@@ -20,14 +23,14 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.lifecycle.MutableLiveData;
 
-import org.json.JSONObject;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -39,7 +42,20 @@ import io.github.muntashirakon.adb.AdbPairingRequiredException;
 import io.github.muntashirakon.adb.AdbStream;
 import io.github.muntashirakon.adb.LocalServices;
 
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.Text;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.InputStream;
+
 public class HelperService extends Service {
+    private static final String TAG = "HelperService";
     public static boolean running = false;
     private static final String CHANNEL_ID = "my_service_channel";
     public static final int NOTIFICATION_ID = 1;
@@ -161,12 +177,101 @@ public class HelperService extends Service {
            Log.d("TEST", "GOT PACKAGE on service: " + pkg);
         }
 
+        img2text().thenAccept(jsonObject -> {
+            Log.d("OCR", jsonObject.toString());
+        });
+
         if (runningThread != null) {
             runningThread.interrupt();
             runningThread = new Thread(new MainRunning(this, code));
         }
 
         return START_NOT_STICKY;
+    }
+
+    private Bitmap loadImageFromAssets(String fileName) {
+        try {
+            InputStream inputStream = getAssets().open(fileName);
+            return BitmapFactory.decodeStream(inputStream);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+    private CompletableFuture<JSONObject> img2text() {
+        CompletableFuture<JSONObject> future = new CompletableFuture<>();
+        TextRecognizer textRecognizer =
+                TextRecognition.getClient(new ChineseTextRecognizerOptions.Builder().build());
+        Bitmap bitmap = loadImageFromAssets("screen.png");
+        if (bitmap != null) {
+            // 创建 InputImage 对象
+            JSONObject result = new JSONObject();
+            InputImage image = InputImage.fromBitmap(bitmap, 0);
+            // 识别文本
+            textRecognizer.process(image)
+                    .addOnSuccessListener(text -> {
+                        // 处理识别结果
+                        String resultText = text.getText();
+                        Log.d("TEST", "识别结果：" + resultText);
+                        try {
+                            result.put("width", image.getWidth());
+                            result.put("height", image.getHeight());
+                            JSONArray results = new JSONArray();
+                            result.put("results", results);
+                            List<Text.TextBlock> textBlocks = text.getTextBlocks();
+                            for (Text.TextBlock block : textBlocks) {
+                                // 获取文本块的边界框
+                                Rect boundingBox = block.getBoundingBox();
+                                if (boundingBox != null) {
+                                    Log.d(TAG, "Text Block bounding box: " + boundingBox.toString());
+                                }
+
+                                // 获取文本块中的每一行
+                                List<Text.Line> lines = block.getLines();
+                                for (Text.Line line : lines) {
+                                    // 获取每一行的边界框
+                                    Rect lineBoundingBox = line.getBoundingBox();
+                                    if (lineBoundingBox != null) {
+                                        Log.d(TAG, "Line bounding box: " + line.getText() + " " + lineBoundingBox.toString());
+                                    }
+
+                                    // 获取每一行的元素（单个字符）
+                                    List<Text.Element> elements = line.getElements();
+                                    for (Text.Element element : elements) {
+                                        // 获取每个字符的边界框
+                                        Rect elementBoundingBox = element.getBoundingBox();
+                                        if (elementBoundingBox != null) {
+                                            JSONObject node = new JSONObject();
+                                            node.put("text", element.getText());
+                                            JSONObject bbox = new JSONObject();
+                                            bbox.put("x", elementBoundingBox.left);
+                                            bbox.put("y", elementBoundingBox.top);
+                                            bbox.put("width", elementBoundingBox.width());
+                                            bbox.put("height", elementBoundingBox.height());
+                                            node.put("boundingBox", bbox);
+                                            results.put(node);
+                                            Log.d(TAG, "Element bounding box: " + element.getText() + " " + elementBoundingBox.toString());
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (JSONException e) {
+                            throw new RuntimeException(e);
+                        }
+                    })
+                    .addOnFailureListener(e -> {
+                        // 处理错误
+                        Log.e("TEST", "识别失败", e);
+                    }).addOnCompleteListener(task -> {
+                        Log.e("TEST", "识别结束");
+                        bitmap.recycle();
+                        textRecognizer.close();
+                        future.complete(result);
+                    });
+        } else {
+            Log.e("TEST", "无法加载图像");
+        }
+        return future;
     }
 
     private void clearSingleTask() {
