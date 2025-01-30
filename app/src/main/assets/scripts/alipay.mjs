@@ -63,7 +63,6 @@ export function logic(ctx, nodes) {
   }
   {
     const card = nodes.find((node) => `${node.text}`.endsWith("明日可领"));
-    console.log("ali", nodes, "card", card);
     if (card) {
       return {
         opts: [
