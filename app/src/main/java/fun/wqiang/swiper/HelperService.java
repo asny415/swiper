@@ -71,6 +71,7 @@ public class HelperService extends Service {
             Log.e("TEST", "Error reading output", e);
         }
     };
+    private Thread runningThread;
 
     public void execute(String command) {
         executor.submit(() -> {
@@ -160,7 +161,10 @@ public class HelperService extends Service {
            Log.d("TEST", "GOT PACKAGE on service: " + pkg);
         }
 
-
+        if (runningThread != null) {
+            runningThread.interrupt();
+            runningThread = new Thread(new MainRunning(this, code));
+        }
 
         return START_NOT_STICKY;
     }

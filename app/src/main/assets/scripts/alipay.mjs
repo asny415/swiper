@@ -11,7 +11,7 @@ export function logic(ctx, nodes) {
 
   const card = nodes.find((node) => node.text === "开心收下");
   if (card) {
-    const [x, y] = JSON.parse(`${card.bounds.split("][")[0]}]`);
+    const { x, y } = card.boundingBox;
     return {
       opts: [
         {
@@ -29,7 +29,7 @@ export function logic(ctx, nodes) {
   {
     const card = nodes.find((node) => node.text === "取消进入");
     if (card) {
-      const [x, y] = JSON.parse(`${card.bounds.split("][")[0]}]`);
+      const { x, y } = card.boundingBox;
       return {
         opts: [
           {
@@ -76,73 +76,70 @@ export function logic(ctx, nodes) {
   }
 
   {
-    if (nodes[0].package == "com.eg.android.AlipayGphone") {
-      const targetcard = nodes.find((node) => node.text === "发现");
-      const entrycard = nodes.find(
-        (node) => node.text === "视频" || node.text === "更新"
-      );
-      if (targetcard) {
-        const values = `[${nodes[0].bounds.split("][")[1]}`;
-        const [width, height] = JSON.parse(values);
-        const x1 = width / 2 + Math.random() * 30 - 15,
-          y1 = (height * 3) / 4 + Math.random() * 100 - 50,
-          x2 = width / 2 + Math.random() * 30 - 15,
-          y2 = (height * 1) / 4 + Math.random() * 100 - 50;
-        const duration = Math.random() * 100 - 50 + 600;
-        const delay = Math.random() * 3000 + 3000;
-        if (ctx.lastSwipe && new Date().getTime() - ctx.lastSwipe < delay) {
-          return {
-            opts: [{ opt: "sleep", reason: "等待", params: { ms: 500 } }],
-          };
-        }
-        console.log("上次滑动间隔:", new Date().getTime() - ctx.lastSwipe);
+    const targetcard = nodes.find(
+      (node) =>
+        node.text === "发现" || node.text === "微剧" || node.text === "关注"
+    );
+    const entrycard = nodes.find(
+      (node) => node.text === "视频" || node.text === "更新"
+    );
+    if (targetcard) {
+      const { width, height } = ctx;
+      const x1 = width / 2 + Math.random() * 30 - 15,
+        y1 = (height * 3) / 4 + Math.random() * 100 - 50,
+        x2 = width / 2 + Math.random() * 30 - 15,
+        y2 = (height * 1) / 4 + Math.random() * 100 - 50;
+      const duration = Math.random() * 100 - 50 + 600;
+      const delay = Math.random() * 3000 + 3000;
+      if (ctx.lastSwipe && new Date().getTime() - ctx.lastSwipe < delay) {
         return {
-          lastSwipe: new Date().getTime(),
-          unknown: 0,
-          opts: [
-            {
-              opt: "swipe",
-              reason: "正常滑动",
-              params: { x1, y1, x2, y2, duration },
-            },
-          ],
+          opts: [{ opt: "sleep", reason: "等待", params: { ms: 500 } }],
         };
-      } else if (entrycard) {
-        const [x, y] = JSON.parse(`${entrycard.bounds.split("][")[0]}]`);
+      }
+      console.log("上次滑动间隔:", new Date().getTime() - ctx.lastSwipe);
+      return {
+        lastSwipe: new Date().getTime(),
+        unknown: 0,
+        opts: [
+          {
+            opt: "swipe",
+            reason: "正常滑动",
+            params: { x1, y1, x2, y2, duration },
+          },
+        ],
+      };
+    } else if (entrycard) {
+      const { x, y } = entrycard.boundingBox;
+      return {
+        opts: [
+          {
+            opt: "click",
+            reason: "点击视频",
+            params: {
+              x: x + Math.random() * 10 + 10,
+              y: y + Math.random() * 10 + 10,
+            },
+          },
+        ],
+      };
+    } else {
+      const unknown = (ctx.unknown || 0) + 1;
+      console.log("unknow but unknown is", unknown);
+      if (unknown > 1) {
         return {
           opts: [
             {
-              opt: "click",
-              reason: "点击视频",
-              params: {
-                x: x + Math.random() * 10 + 10,
-                y: y + Math.random() * 10 + 10,
-              },
+              opt: "back",
+              reason: "是不是进直播了，按一下返回吧",
             },
           ],
         };
       } else {
-        const unknown = (ctx.unknown || 0) + 1;
-        console.log("unknow but unknown is", unknown);
-        if (unknown > 1) {
-          return {
-            opts: [
-              {
-                opt: "back",
-                reason: "是不是进直播了，按一下返回吧",
-              },
-            ],
-          };
-        } else {
-          return {
-            unknown,
-            opts: [{ opt: "sleep", reason: "等等再说", params: { ms: 500 } }],
-          };
-        }
+        return {
+          unknown,
+          opts: [{ opt: "sleep", reason: "等等再说", params: { ms: 500 } }],
+        };
       }
     }
   }
-  return {
-    opts: [{ opt: "sleep", reason: "不知道该做什么", params: { ms: 500 } }],
-  };
 }

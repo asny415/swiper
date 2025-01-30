@@ -49,23 +49,6 @@ if (!deviceId) {
   deviceId = deviceLines[0].split("\t")[0];
 }
 
-function parseNodesFromXml(xml) {
-  const json = [];
-  const regex = /<android.widget.[^ ]*[^>]*\/?>/g;
-  let match;
-  while ((match = regex.exec(xml)) !== null) {
-    const nodeString = match[0];
-    const node = {};
-    const attributes = nodeString.match(/(\w+)="([^"]*)"/g);
-    attributes.forEach((attr) => {
-      const [key, value] = attr.split("=");
-      node[key] = value.replace(/"/g, "");
-    });
-    json.push(node);
-  }
-  return json;
-}
-
 console.log("启动运行", module.name, deviceId);
 
 try {
@@ -97,23 +80,26 @@ await new Promise((r) => setTimeout(r, 5000));
 const ctx = {};
 while (true) {
   console.log(new Date(), "开始截屏...");
-  unlinkSync("screen.png");
+  try {
+    unlinkSync("screen.png");
+  } catch (err) {
+    //skip
+  }
   execSync(`adb -s ${deviceId} exec-out screencap -p > screen.png`);
   const result = execSync(`vision-ocr screen.png`);
 
-  const nodes = result
-    .toString()
-    .split("\n")
-    .map((text) => ({ text: text.trim() }))
-    .filter((a) => a.text);
-  console.log(new Date(), "截屏成功，节点数：", nodes.length);
+  const screen = JSON.parse(result);
+  console.log(new Date(), "截屏成功，节点数：", screen.results.length);
   if (saveHistory) {
     const filePath = join(process.cwd(), `node.${new Date()}.json`);
-    writeFileSync(filePath, JSON.stringify(nodes, null, 2));
+    writeFileSync(filePath, JSON.stringify(screen, null, 2));
   }
-  const { opts, ...others } = module.logic(ctx, nodes);
+  console.log(screen);
+  const { opts, ...others } = module.logic(
+    { ...ctx, width: screen.imageWidth, height: screen.imageHeight },
+    screen.results
+  );
   Object.assign(ctx, others);
-  console.log("got:", opts);
   for (const opt of opts) {
     await runOpt(deviceId, opt);
   }
