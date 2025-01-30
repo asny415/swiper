@@ -91,6 +91,9 @@ execSync(
 execSync(
   `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server.test`
 );
+execSync(
+  `adb -s ${deviceId} shell 'dumpsys deviceidle whitelist +io.appium.settings ; dumpsys deviceidle whitelist +io.appium.uiautomator2.server ; dumpsys deviceidle whitelist +io.appium.uiautomator2.server.test ;'`
+);
 
 async function clear() {
   execSync(`adb -s ${deviceId} forward --remove tcp:${localPort}`);
