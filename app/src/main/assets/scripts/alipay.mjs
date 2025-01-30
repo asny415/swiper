@@ -9,10 +9,6 @@ export function logic(ctx, nodes) {
     };
   }
 
-  if (nodes[0].package !== "com.eg.android.AlipayGphone") {
-    return { opts: [] };
-  }
-
   const card = nodes.find((node) => node.text === "开心收下");
   if (card) {
     const [x, y] = JSON.parse(`${card.bounds.split("][")[0]}]`);
@@ -50,25 +46,6 @@ export function logic(ctx, nodes) {
   }
 
   {
-    const card = nodes.find((node) => node.desc === "关闭");
-    if (card) {
-      const [x, y] = JSON.parse(`${card.bounds.split("][")[0]}]`);
-      return {
-        opts: [
-          {
-            opt: "click",
-            reason: "需要关闭",
-            params: {
-              x: x + Math.random() * 50 + 50,
-              y: y + Math.random() * 50 + 50,
-            },
-          },
-        ],
-      };
-    }
-  }
-
-  {
     const card = nodes.find((node) => `${node.text}`.endsWith("请进行验证"));
     if (card) {
       return {
@@ -86,6 +63,7 @@ export function logic(ctx, nodes) {
   }
   {
     const card = nodes.find((node) => `${node.text}`.endsWith("明日可领"));
+    console.log("ali", nodes, "card", card);
     if (card) {
       return {
         opts: [

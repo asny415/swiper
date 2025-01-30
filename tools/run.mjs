@@ -1,8 +1,7 @@
 import * as alipay from "../app/src/main/assets/scripts/alipay.mjs";
 import { execSync } from "child_process";
-import { writeFileSync } from "fs";
+import { writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
-import { spawn } from "child_process";
 
 const modules = { alipay };
 let args = process.argv;
@@ -82,103 +81,31 @@ try {
   process.exit(1);
 }
 
-const localPort = 8000 + Math.floor(Math.random() * 1000);
-execSync(`adb -s ${deviceId} forward tcp:${localPort} tcp:6790`);
-
-execSync(
-  `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server`
-);
-execSync(
-  `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server.test`
-);
-execSync(
-  `adb -s ${deviceId} shell 'dumpsys deviceidle whitelist +io.appium.settings ; dumpsys deviceidle whitelist +io.appium.uiautomator2.server ; dumpsys deviceidle whitelist +io.appium.uiautomator2.server.test ;'`
-);
-
-async function clear() {
-  try {
-    execSync(`adb -s ${deviceId} forward --remove tcp:${localPort}`);
-    execSync(
-      `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server`
-    );
-    execSync(
-      `adb -s ${deviceId} shell am force-stop io.appium.uiautomator2.server.test`
-    );
-  } catch (err) {
-    //skip
-  }
-}
-
 process.on("SIGINT", async () => {
   console.log("Caught interrupt signal, cleaning up...");
-  await clear();
   process.exit();
 });
 
 process.on("uncaughtException", async (err) => {
   console.error("Uncaught Exception:", err);
-  await clear();
   execSync(`say "程序异常退出"`);
   process.exit(1);
 });
 
-const proxy = spawn("adb", [
-  "-s",
-  deviceId,
-  "shell",
-  "am",
-  "instrument",
-  "-w",
-  "-e",
-  "disableAnalytics",
-  "true",
-  "io.appium.uiautomator2.server.test/androidx.test.runner.AndroidJUnitRunner",
-]);
-proxy.stdout.on("data", (data) => {
-  console.log(`proxy stdout: ${data}`);
-});
-proxy.stderr.on("data", (data) => {
-  console.error(`proxy stderr: ${data}`);
-});
-proxy.on("close", (code) => {
-  console.log(`proxy exited with code ${code}`);
-});
-
 await new Promise((r) => setTimeout(r, 5000));
-
-const res = await fetch(`http://127.0.0.1:${localPort}/session`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    capabilities: {
-      firstMatch: [
-        {
-          platformName: "Android",
-          automationName: "UiAutomator2",
-        },
-      ],
-    },
-  }),
-});
-const json = await res.json();
-console.log(json);
-const sessionId = json.value.sessionId;
-if (!sessionId) {
-  console.log("创建session失败");
-  process.exit(0);
-}
 
 const ctx = {};
 while (true) {
   console.log(new Date(), "开始截屏...");
-  const pageres = await fetch(
-    `http://127.0.0.1:${localPort}/session/${sessionId}/source`
-  );
-  const pagejson = await pageres.json();
-  const xml = pagejson.value;
-  const nodes = parseNodesFromXml(xml);
+  unlinkSync("screen.png");
+  execSync(`adb -s ${deviceId} exec-out screencap -p > screen.png`);
+  const result = execSync(`python ocr.py screen.png`);
+
+  const nodes = result
+    .toString()
+    .split("\n")
+    .map((text) => ({ text: text.trim() }))
+    .filter((a) => a.text);
   console.log(new Date(), "截屏成功，节点数：", nodes.length);
   if (saveHistory) {
     const filePath = join(process.cwd(), `node.${new Date()}.json`);
@@ -186,6 +113,7 @@ while (true) {
   }
   const { opts, ...others } = module.logic(ctx, nodes);
   Object.assign(ctx, others);
+  console.log("got:", opts);
   for (const opt of opts) {
     await runOpt(deviceId, opt);
   }
@@ -218,7 +146,6 @@ async function runOpt(deviceId, opration) {
     });
   } else if (opt === "finish") {
     execSync(`say "任务完成"`);
-    await clear();
     process.exit(0);
   } else if (opt === "sleep") {
     const { ms } = params;

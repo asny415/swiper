@@ -71,7 +71,6 @@ public class HelperService extends Service {
             Log.e("TEST", "Error reading output", e);
         }
     };
-    private String script;
 
     public void execute(String command) {
         executor.submit(() -> {
@@ -161,35 +160,8 @@ public class HelperService extends Service {
            Log.d("TEST", "GOT PACKAGE on service: " + pkg);
         }
 
-//        if (scheduledFuture == null) {
-//
-//        }
 
-//        if (ACTION_SMART.equals(intent.getAction())) {
-//            if (scheduledFuture == null) {
-//                String result = jshelper.executeJavaScript("const param='';\n" + script + "\nlogic(param)");
-//                try {
-//                    JSONObject jsonObject = new JSONObject(result);
-//                    Log.d("TEST", "result: " + result);
-//                    Log.d("TEST", "opt: " + jsonObject.getString("opt"));
-//                } catch (Exception e) {
-//                    Log.e("TEST", "Error parsing JSON", e);
-//                }
-////                connect2adb();
-////                taskSingleRound();
-//            } else {
-//                clearSingleTask();
-//            }
-//        } else if (ACTION_STOP.equals(intent.getAction())) {
-//            stopForeground(true);
-//            stopSelf();
-//        } else {
-//            script = intent.getStringExtra("script");
-//            Log.d("TEST", "action not match");
-//            createNotification();
-//        }
 
-        // 返回 START_STICKY 或 START_NOT_STICKY，以控制服务的重启行为
         return START_NOT_STICKY;
     }
 
