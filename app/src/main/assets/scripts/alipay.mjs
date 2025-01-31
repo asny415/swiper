@@ -76,7 +76,9 @@ export function logic(ctx, nodes) {
   }
 
   {
-    const card = nodes.find((node) => `${node.text}`.endsWith("祝你四时安平"));
+    const card = nodes.find(
+      (node) => `${node.text}`.indexOf("支付宝祝你") >= 0
+    );
     if (card) {
       return {
         opts: [
