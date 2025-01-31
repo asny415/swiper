@@ -9,9 +9,13 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Rect;
+import android.media.AudioAttributes;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Looper;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.Voice;
 import android.util.Base64;
 import android.util.Log;
 import android.widget.Toast;
@@ -29,6 +33,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -61,15 +66,12 @@ enum Event {
 
 public class HelperService extends Service {
     private static final String TAG = "HelperService";
-    public static boolean running = false;
-    private static final String CHANNEL_ID = "my_service_channel";
     public static final int NOTIFICATION_ID = 1;
-    private static final String ACTION_SMART = "ACTION_SMART";
-    private static final String ACTION_STOP = "ACTION_STOP";
     private final ExecutorService executor = Executors.newFixedThreadPool(3);
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private static ScheduledFuture<?> scheduledFuture;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private TextToSpeech tts;
 
     @Nullable
     private AdbStream adbShellStream;
@@ -131,7 +133,32 @@ public class HelperService extends Service {
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         jsHelper = ((App) getApplication()).getJsHelper();
         commandOutput.observeForever(screenCaptureObserver);
-        goEvent(Event.Start, new JSONObject());
+        initTTS();
+    }
+
+    private void initTTS() {
+        tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
+            @Override
+            public void onInit(int status) {
+                if (status == TextToSpeech.SUCCESS) {
+                    // 设置语言（例如中文）
+                    int result = tts.setLanguage(Locale.CHINESE);
+                    if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                        // 语言数据缺失或不支持，提示用户下载
+                        Log.e("TTS", "语言不支持");
+                    } else {
+                        tts.setAudioAttributes(
+                                new AudioAttributes.Builder()
+                                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION) // 用途
+                                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH) // 内容类型
+                                        .build()
+                        );
+                    }
+                } else {
+                    Log.e("TTS", "初始化失败");
+                }
+            }
+        });
     }
 
     private void goEvent(Event event, JSONObject params) {
@@ -151,7 +178,9 @@ public class HelperService extends Service {
 
     // 获取当前屏幕，进行OCR文字识别，调用目标函数，根据结果调度，处理异常
     private void goEvtStart() {
-         executeScreenCapture();
+        if (!script.isEmpty()) {
+            executeScreenCapture();
+        }
     }
 
     private final Observer<CharSequence> screenCaptureObserver = output -> {
@@ -210,6 +239,7 @@ public class HelperService extends Service {
             try {
                 runLogic(new JSONObject(runs));
             } catch (JSONException e) {
+                Log.e(TAG, "Error running logic:", e);
                 throw new RuntimeException(e);
             }
         });
@@ -220,10 +250,16 @@ public class HelperService extends Service {
             JSONArray opts = obj.getJSONArray("opts");
             for (int i = 0; i < opts.length(); i++) {
                 JSONObject opt = opts.getJSONObject(i);
-                Objects.requireNonNull(runOpt(opt.getString("opt"), opt.getString("reason"), opt.getJSONObject("params"))).get();
+                String reason = "";
+                try {
+                    reason = opt.getString("reason");
+                } catch (JSONException e) {
+                }
+                Objects.requireNonNull(runOpt(opt.getString("opt"), reason, opt.getJSONObject("params"))).get();
             }
             goEvent(Event.Start, new JSONObject());
         } catch (JSONException | ExecutionException | InterruptedException e) {
+            Log.e(TAG, "Error running logic:", e);
             throw new RuntimeException(e);
         }
         obj.remove("opts");
@@ -274,6 +310,25 @@ public class HelperService extends Service {
             } catch (JSONException e) {
                 throw new RuntimeException(e);
             }
+        } else if (opt.equals("say")) {
+            try {
+                tts.speak(reason, TextToSpeech.QUEUE_FLUSH, null, null);
+                int ms = params.getInt("ms");
+                return CompletableFuture.runAsync(()->{
+                    try {
+                        Thread.sleep(ms);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+            } catch (JSONException e) {
+                Log.e(TAG, "Error speaking:", e);
+            }
+        } else if (opt.equals("finish")) {
+            tts.speak("今日任务完成", TextToSpeech.QUEUE_FLUSH, null, null);
+            Log.d(TAG, "听到说话了吗？");
+            script = "";
+            return CompletableFuture.completedFuture(null);
         }
         return null;
     }
@@ -343,6 +398,7 @@ public class HelperService extends Service {
         Log.d("TEST", String.format("************ start command with action: %s %b", intent.getAction(), scheduledFuture == null));
         script = intent.getStringExtra("script");
         initRuntime();
+        goEvent(Event.Start, new JSONObject());
         return START_NOT_STICKY;
     }
 
