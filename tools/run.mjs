@@ -80,13 +80,9 @@ await new Promise((r) => setTimeout(r, 5000));
 const ctx = {};
 while (true) {
   console.log(new Date(), "开始截屏...");
-  try {
-    unlinkSync("screen.png");
-  } catch (err) {
-    //skip
-  }
-  execSync(`adb -s ${deviceId} exec-out screencap -p > screen.png`);
-  const result = execSync(`vision-ocr screen.png`);
+  const result = execSync(
+    `adb -s ${deviceId} exec-out screencap -p | vision-ocr`
+  );
 
   const screen = JSON.parse(result);
   console.log(new Date(), "截屏成功，节点数：", screen.results.length);

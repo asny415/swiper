@@ -9,7 +9,7 @@ export function logic(ctx, nodes) {
     };
   }
 
-  const card = nodes.find((node) => node.text === "开心收下");
+  const card = nodes.find((node) => node.text.indexOf("开心收下") >= 0);
   if (card) {
     const { x, y } = card.boundingBox;
     return {
@@ -27,7 +27,7 @@ export function logic(ctx, nodes) {
   }
 
   {
-    const card = nodes.find((node) => node.text === "取消进入");
+    const card = nodes.find((node) => node.text.indexOf("取消进入") >= 0);
     if (card) {
       const { x, y } = card.boundingBox;
       return {
@@ -76,9 +76,23 @@ export function logic(ctx, nodes) {
   }
 
   {
+    const card = nodes.find((node) => `${node.text}`.endsWith("祝你四时安平"));
+    if (card) {
+      return {
+        opts: [
+          {
+            opt: "back",
+            reason: "四时平安卡",
+            params: {},
+          },
+        ],
+      };
+    }
+  }
+
+  {
     const targetcard = nodes.find(
-      (node) =>
-        node.text === "发现" || node.text === "微剧" || node.text === "关注"
+      (node) => node.text.indexOf("直播") >= 0 || node.text.indexOf("微剧") >= 0
     );
     const entrycard = nodes.find(
       (node) => node.text === "视频" || node.text === "更新"
@@ -118,6 +132,13 @@ export function logic(ctx, nodes) {
             params: {
               x: x + Math.random() * 10 + 10,
               y: y + Math.random() * 10 + 10,
+            },
+          },
+          {
+            opt: "sleep",
+            reason: "随机延迟",
+            params: {
+              ms: Math.random * 1000 + 1000,
             },
           },
         ],

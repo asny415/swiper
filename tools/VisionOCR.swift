@@ -3,15 +3,15 @@ import Foundation
 import Vision
 import AppKit
 
-// 1. 从命令行参数获取图片路径
-guard CommandLine.arguments.count > 1 else {
-    print("Usage: VisionOCR <image_path>")
+// 1. 从标准输入读取图片数据
+let fileHandle = FileHandle.standardInput
+guard let imageData = try? fileHandle.readToEnd(), !imageData.isEmpty else {
+    print("Error: Failed to read image from standard input.")
     exit(1)
 }
-let imagePath = CommandLine.arguments[1]
 
 // 2. 加载图片
-guard let nsImage = NSImage(contentsOfFile: imagePath) else {
+guard let nsImage = NSImage(data: imageData) else {
     print("Error: Failed to load image.")
     exit(2)
 }
@@ -99,3 +99,4 @@ do {
 
 // 5. 保持运行直到完成
 RunLoop.current.run()
+
