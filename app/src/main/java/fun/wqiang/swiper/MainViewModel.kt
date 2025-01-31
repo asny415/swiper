@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.util.Base64
+import android.widget.Toast
 
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -299,5 +300,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     running.postValue(isNotificationVisible)
+    }
+
+    fun startPackage(context: Context, pkg: String) {
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(pkg)
+        if (launchIntent != null) {
+            context.startActivity(launchIntent)
+        }
     }
 }

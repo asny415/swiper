@@ -2,62 +2,46 @@ package fun.wqiang.swiper;
 
 import static io.github.muntashirakon.adb.LocalServices.SHELL;
 
-import android.app.Notification;
-import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.PixelFormat;
 import android.graphics.Rect;
-import android.hardware.display.DisplayManager;
-import android.hardware.display.VirtualDisplay;
-import android.media.Image;
-import android.media.ImageReader;
-import android.media.projection.MediaProjection;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.Looper;
 import android.util.Base64;
-import android.util.DisplayMetrics;
 import android.util.Log;
-import android.view.WindowManager;
 import android.widget.Toast;
 import android.os.Handler;
 
 import androidx.annotation.Nullable;
-import androidx.core.app.NotificationCompat;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 import io.github.muntashirakon.adb.AbsAdbConnectionManager;
-import io.github.muntashirakon.adb.AdbInputStream;
 import io.github.muntashirakon.adb.AdbPairingRequiredException;
 import io.github.muntashirakon.adb.AdbStream;
-import io.github.muntashirakon.adb.LocalServices;
 
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.Text;
@@ -68,9 +52,6 @@ import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-
-import java.io.InputStream;
-import java.util.function.Consumer;
 
 enum Event {
     Start,
@@ -105,7 +86,6 @@ public class HelperService extends Service {
                     clearEnabled = false;
                 }
                 sb.append(s).append("\n");
-                Log.d("TEST", "GEt somehting:" + s);
                 commandOutput.postValue(sb);
             }
         } catch (IOException e) {
@@ -118,6 +98,7 @@ public class HelperService extends Service {
     private JSONObject ctx = new JSONObject();
 
     public void execute(String command) {
+        Log.d("ADB", "execute command: " + command);
         executor.submit(() -> {
             try {
                 if (command.equals("clear")) {
@@ -211,7 +192,90 @@ public class HelperService extends Service {
         Bitmap bitmap = decodeBase64ToBitmap(base64);
         img2text(bitmap).thenAccept(jsonObject -> {
            Log.d("TEST", "GOT JSON:" + jsonObject.toString());
+            try {
+                ctx.put("width", jsonObject.getInt("width"));
+                ctx.put("height", jsonObject.getInt("height"));
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
+            JSONArray nodes;
+            try {
+                nodes = jsonObject.getJSONArray("results");
+            } catch (JSONException e) {
+                Log.e("TEST", "Error getting nodes:", e);
+                throw new RuntimeException(e);
+            }
+            String runs  =  jsHelper.executeJavaScript(script + "\n" + "JSON.stringify(logic("+ctx.toString()+","+nodes.toString()+"))");
+            Log.d("TEST", "logic result:"+runs);
+            try {
+                runLogic(new JSONObject(runs));
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
         });
+    }
+
+    private void runLogic(JSONObject obj) {
+        try {
+            JSONArray opts = obj.getJSONArray("opts");
+            for (int i = 0; i < opts.length(); i++) {
+                JSONObject opt = opts.getJSONObject(i);
+                Objects.requireNonNull(runOpt(opt.getString("opt"), opt.getString("reason"), opt.getJSONObject("params"))).get();
+            }
+            goEvent(Event.Start, new JSONObject());
+        } catch (JSONException | ExecutionException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        obj.remove("opts");
+        for (Iterator<String> it = obj.keys(); it.hasNext(); ) {
+            String key = it.next();
+            try {
+                ctx.put(key, obj.get(key));
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    private CompletableFuture<Void> runOpt(String opt, String reason, JSONObject params) {
+        Log.d("TEST", "runOpt: " + opt + " " + reason + " " + params.toString());
+        if (opt.equals("sleep")) {
+            try {
+                long ms = params.getLong("ms");
+                return CompletableFuture.runAsync(() -> {
+                    try {
+                        Thread.sleep(ms);
+                        Log.d("TEST", "sleep finish");
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
+        } else if (opt.equals("click")) {
+            try {
+                int x = (int) params.getDouble("x");
+                int y = (int) params.getDouble("y");
+                execute("input tap " + x + " " + y);
+                return CompletableFuture.completedFuture(null);
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
+        } else if (opt.equals("swipe")) {
+            try {
+                int x1 = (int) params.getDouble("x1");
+                int y1 = (int) params.getDouble("y1");
+                int x2 = (int) params.getDouble("x2");
+                int y2 = (int) params.getDouble("y2");
+                int duration = (int) params.getDouble("duration");
+                execute("swipe " + x1 + " " + y1 + " " + x2 + " " + y2 + " " +duration);
+                return CompletableFuture.completedFuture(null);
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return null;
     }
 
     private void executeScreenCapture() {
@@ -301,7 +365,6 @@ public class HelperService extends Service {
                     .addOnSuccessListener(text -> {
                         // 处理识别结果
                         String resultText = text.getText();
-                        Log.d("TEST", "识别结果：" + resultText);
                         try {
                             result.put("width", image.getWidth());
                             result.put("height", image.getHeight());
@@ -309,21 +372,9 @@ public class HelperService extends Service {
                             result.put("results", results);
                             List<Text.TextBlock> textBlocks = text.getTextBlocks();
                             for (Text.TextBlock block : textBlocks) {
-                                // 获取文本块的边界框
-                                Rect boundingBox = block.getBoundingBox();
-                                if (boundingBox != null) {
-                                    Log.d(TAG, "Text Block bounding box: " + boundingBox.toString());
-                                }
-
                                 // 获取文本块中的每一行
                                 List<Text.Line> lines = block.getLines();
                                 for (Text.Line line : lines) {
-                                    // 获取每一行的边界框
-                                    Rect lineBoundingBox = line.getBoundingBox();
-                                    if (lineBoundingBox != null) {
-                                        Log.d(TAG, "Line bounding box: " + line.getText() + " " + lineBoundingBox.toString());
-                                    }
-
                                     // 获取每一行的元素（单个字符）
                                     List<Text.Element> elements = line.getElements();
                                     for (Text.Element element : elements) {
@@ -339,7 +390,6 @@ public class HelperService extends Service {
                                             bbox.put("height", elementBoundingBox.height());
                                             node.put("boundingBox", bbox);
                                             results.put(node);
-                                            Log.d(TAG, "Element bounding box: " + element.getText() + " " + elementBoundingBox.toString());
                                         }
                                     }
                                 }

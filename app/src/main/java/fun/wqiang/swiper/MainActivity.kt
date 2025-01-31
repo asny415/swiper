@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
                                 intent.putExtra("script", item.getString("code"))
                                 startService(intent)
                                 viewModel!!.showNotification(this)
+                                viewModel!!.startPackage(this, item.getString("pkg"))
                             },
                             onShowDialog = {
                             viewModel!!.getPairingPort()
