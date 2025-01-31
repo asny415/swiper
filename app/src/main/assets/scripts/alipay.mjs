@@ -138,7 +138,7 @@ export function logic(ctx, nodes) {
             opt: "sleep",
             reason: "随机延迟",
             params: {
-              ms: Math.random * 1000 + 1000,
+              ms: Math.random() * 1000 + 1000,
             },
           },
         ],
