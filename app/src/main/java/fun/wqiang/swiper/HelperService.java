@@ -13,6 +13,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Rect;
 import android.media.AudioAttributes;
+import android.media.AudioManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.Looper;
@@ -72,7 +73,9 @@ public class HelperService extends Service {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextToSpeech tts;
+    private AudioManager audioManager;
     private JavaScriptIsolate jsenv=null;
+
 
     @Nullable
     private AdbStream adbShellStream;
@@ -159,12 +162,18 @@ public class HelperService extends Service {
                     // 语言数据缺失或不支持，提示用户下载
                     Log.e("TTS", "语言不支持");
                 } else {
+                    Log.d(TAG, "设置声音属性");
                     tts.setAudioAttributes(
                             new AudioAttributes.Builder()
                                     .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION) // 用途
                                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH) // 内容类型
                                     .build()
                     );
+                    // 配置音频管理器以使用扬声器
+                    audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                    audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+                    audioManager.setSpeakerphoneOn(true);
+
                 }
             } else {
                 Log.e("TTS", "初始化失败");
@@ -197,7 +206,6 @@ public class HelperService extends Service {
     private void goEvtStart() {
         if (!script.isEmpty()) {
             executePackageCheck();
-//            executeScreenCapture();
         }
     }
 
@@ -368,7 +376,7 @@ public class HelperService extends Service {
                 tts.speak("今日任务完成", TextToSpeech.QUEUE_FLUSH, null, null);
                 Log.d(TAG, "听到说话了吗？");
                 script = "";
-                stopSelf();
+                new Handler().postDelayed(this::stopSelf, 3000);
                 return CompletableFuture.completedFuture(null);
         }
         return null;
@@ -396,6 +404,14 @@ public class HelperService extends Service {
         base64png.removeObserver(screenCaptureObserver);
         currentPkg.removeObserver(packageCheckObserver);
         clearAllNotifications();
+        if (tts != null) {
+            tts.stop();
+            tts.shutdown();
+        }
+        if (audioManager != null) {
+            audioManager.setSpeakerphoneOn(false);
+            audioManager.setMode(AudioManager.MODE_NORMAL);
+        }
     }
 
     private void goEvtConnect2ADB() {
