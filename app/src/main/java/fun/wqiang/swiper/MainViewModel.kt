@@ -1,19 +1,12 @@
 package `fun`.wqiang.swiper
 
 import android.app.Application
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.service.notification.StatusBarNotification
 import android.util.Log
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -34,7 +27,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.util.Base64
-import android.widget.Toast
 
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -46,16 +38,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val needPair = MutableLiveData<Boolean>()
     private val pairPort = MutableLiveData<Int>()
     private val scripts = MutableLiveData<List<JSONObject>>()
-    private val CHANNEL_ID: String = "my_service_channel"
-    private val NOTIFICATION_ID: Int = 1
 
     init {
         val mjsScripts = readAllMjsFilesFromAssets(application)
         val scriptsList = mutableListOf<JSONObject>()
-        Handler(Looper.getMainLooper()).postDelayed(Runnable {
+        Handler(Looper.getMainLooper()).postDelayed({
+            val jsenv = (application as App).jsHelper!!.newJsIsolate();
             for ((fileName, content) in mjsScripts) {
                 val code = content.replace("export ","")
-                val txt = (application as App).jsHelper!!.executeJavaScript("$code\n JSON.stringify({name, description, pkg, icon:''})")
+                val txt = (application as App).jsHelper!!.executeJavaScript(jsenv,"$code\n JSON.stringify({name, description, pkg, icon:''})")
                 Log.d("*** 脚本执行结果 ***", "$fileName:$txt")
                 val obj = JSONObject(txt)
                 obj.put("code", code)
@@ -70,7 +61,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }, 1000)
     }
 
-    fun drawableToBitmap(drawable: Drawable): Bitmap {
+    private fun drawableToBitmap(drawable: Drawable): Bitmap {
         // Check if the drawable has valid dimensions
         if (drawable.intrinsicWidth <= 0 || drawable.intrinsicHeight <= 0) {
             // Create a single-color bitmap of 1x1 pixel if dimensions are invalid
@@ -95,7 +86,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         return bitmap
     }
-    fun drawableToBase64(drawable: Drawable): String? {
+    private fun drawableToBase64(drawable: Drawable): String? {
         val bitmap = drawableToBitmap(drawable)
         val byteArrayOutputStream =
             ByteArrayOutputStream()
@@ -104,7 +95,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return Base64.encodeToString(byteArray,
             Base64.DEFAULT)
     }
-    fun getApplicationIcon(context: Context, packageName: String): Drawable? {
+    private fun getApplicationIcon(context: Context, packageName: String): Drawable? {
         return try {
             context.packageManager.getApplicationIcon(packageName)
         } catch (e: PackageManager.NameNotFoundException) {
@@ -145,63 +136,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         return scripts
     }
-    private fun createActivityIntent(context: Context): Intent {
-        // 创建一个 Intent，用于启动目标 Activity
-        val intent = Intent(context, MainActivity::class.java)
-        // 可以添加一些额外的参数
-        intent.putExtra("key", "value")
-        // 设置启动模式
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        return intent
-    }
-
-    private fun createActivityPendingIntent(context: Context): PendingIntent {
-        val intent = createActivityIntent(context)
-        // 创建一个 PendingIntent，用于启动 Activity
-        val pendingIntent: PendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            PendingIntent.getActivity(
-                context,
-                0,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-            )
-        } else {
-            PendingIntent.getActivity(
-                context,
-                0,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT
-            )
-        }
-        return pendingIntent
-    }
-
-    fun showNotification(context: Context) {
-        val pendingIntent = createActivityPendingIntent(context)
-
-        // 创建一个通知
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(context.getString(R.string.app_name))
-            .setContentText("点我快速返回")
-            .setContentIntent(pendingIntent) // 设置 PendingIntent
-            .setAutoCancel(true) // 点击后自动取消
-
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "滑动通知",
-                NotificationManager.IMPORTANCE_HIGH
-            )
-            val notificationManager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-
-
-        notificationManager.notify(NOTIFICATION_ID, builder.build())
-    }
 
     fun watchScripts(): LiveData<List<JSONObject>> {
-        return scripts;
+        return scripts
     }
 
     fun watchPairingPort(): LiveData<Int> {
@@ -282,24 +219,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         executor.submit {
             autoConnectInternal()
         }
-    }
-
-    fun checkNotifyReady() {
-            val notificationManager: NotificationManagerCompat =
-                NotificationManagerCompat.from(getApplication())
-            val activeNotifications: MutableList<StatusBarNotification> =
-                notificationManager.activeNotifications
-
-            val notificationId = HelperService.NOTIFICATION_ID
-
-            var isNotificationVisible = false
-        for (n in  activeNotifications) {
-            if (n.id == notificationId) {
-                isNotificationVisible = true
-                break
-            }
-        }
-    running.postValue(isNotificationVisible)
     }
 
     fun startPackage(context: Context, pkg: String) {

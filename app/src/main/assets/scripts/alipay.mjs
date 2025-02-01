@@ -115,7 +115,7 @@ export function logic(ctx, nodes) {
       console.log("上次滑动间隔:", new Date().getTime() - ctx.lastSwipe);
       return {
         lastSwipe: new Date().getTime(),
-        unknown: 0,
+        lastUnknown: 0,
         opts: [
           {
             opt: "swipe",
@@ -146,10 +146,9 @@ export function logic(ctx, nodes) {
         ],
       };
     } else {
-      const unknown = (ctx.unknown || 0) + 1;
-      console.log("unknow but unknown is", unknown);
-      if (unknown > 1) {
+      if (ctx.lastUnknown && new Date().getTime() - ctx.lastUnknown > 6000) {
         return {
+          lastUnknown: 0,
           opts: [
             {
               opt: "back",
@@ -159,7 +158,7 @@ export function logic(ctx, nodes) {
         };
       } else {
         return {
-          unknown,
+          lastUnknown: ctx.lastUnknown || new Date().getTime(),
           opts: [{ opt: "sleep", reason: "等等再说", params: { ms: 500 } }],
         };
       }

@@ -7,7 +7,6 @@ import com.google.common.util.concurrent.Futures
 import android.content.Context
 import androidx.javascriptengine.JavaScriptIsolate
 import com.google.common.util.concurrent.ListenableFuture
-import java.util.concurrent.Executor
 
 class JsHelper( context:Context) {
     var jsSandbox :JavaScriptSandbox? = null
@@ -28,17 +27,15 @@ class JsHelper( context:Context) {
             }
         }) { it.run() } // 使用一个简单的 Executor
     }
-    fun executeJavaScript(jsCode :String):String {
-//        val jsCode = "function sum(a, b) { let r = a + b; return r.toString(); }; sum(3, 4)"
-        val jsIsolate: JavaScriptIsolate? = jsSandbox?.createIsolate()
-        val jsResultFuture: ListenableFuture<String>? = jsIsolate?.evaluateJavaScriptAsync(jsCode)
-
-        if (jsResultFuture != null) {
-            try {
-                return jsResultFuture.get(3, java.util.concurrent.TimeUnit.SECONDS)
-            } catch (e :Exception) {
-                Log.e("JavaScriptEngine", "Failed to execute JavaScript code.", e)
-            }
+    fun newJsIsolate(): JavaScriptIsolate {
+        return jsSandbox!!.createIsolate();
+    }
+    fun executeJavaScript(jsctx: JavaScriptIsolate, jsCode :String):String {
+        val jsResultFuture: ListenableFuture<String> = jsctx.evaluateJavaScriptAsync(jsCode)
+        try {
+            return jsResultFuture.get(3, java.util.concurrent.TimeUnit.SECONDS)
+        } catch (e :Exception) {
+            Log.e("JavaScriptEngine", "Failed to execute JavaScript code.", e)
         }
         return ""
     }

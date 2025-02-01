@@ -2,7 +2,10 @@ package fun.wqiang.swiper;
 
 import static io.github.muntashirakon.adb.LocalServices.SHELL;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -11,17 +14,17 @@ import android.graphics.BitmapFactory;
 import android.graphics.Rect;
 import android.media.AudioAttributes;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Looper;
 import android.speech.tts.TextToSpeech;
-import android.speech.tts.Voice;
 import android.util.Base64;
 import android.util.Log;
 import android.widget.Toast;
 import android.os.Handler;
 
 import androidx.annotation.Nullable;
+import androidx.core.app.NotificationCompat;
+import androidx.javascriptengine.JavaScriptIsolate;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 
@@ -30,7 +33,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -39,9 +41,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 import io.github.muntashirakon.adb.AbsAdbConnectionManager;
@@ -61,34 +61,48 @@ import org.json.JSONObject;
 enum Event {
     Start,
     Sleep,
-    ConnectADB
+    CaptureScreen, WaitPackage, ConnectADB
 }
 
 public class HelperService extends Service {
     private static final String TAG = "HelperService";
     public static final int NOTIFICATION_ID = 1;
+    private static final String CHANNEL_ID = "my_service_channel";
     private final ExecutorService executor = Executors.newFixedThreadPool(3);
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-    private static ScheduledFuture<?> scheduledFuture;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextToSpeech tts;
+    private JavaScriptIsolate jsenv=null;
 
     @Nullable
     private AdbStream adbShellStream;
-    private volatile boolean clearEnabled;
-    private final MutableLiveData<CharSequence> commandOutput = new MutableLiveData<>();
+    private final MutableLiveData<CharSequence> base64png = new MutableLiveData<>();
+    private final MutableLiveData<CharSequence> currentPkg = new MutableLiveData<>();
     private NotificationManager notificationManager;
     private final Runnable outputGenerator = () -> {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(adbShellStream.openInputStream()))) {
             StringBuilder sb = new StringBuilder();
             String s;
+            boolean inbase64 = false;
             while ((s = reader.readLine()) != null) {
-                if (clearEnabled) {
-                    sb.delete(0, sb.length());
-                    clearEnabled = false;
+                if (s.length() != 76) {
+                    Log.d(TAG, "outputGenerator: " + s);
                 }
-                sb.append(s).append("\n");
-                commandOutput.postValue(sb);
+                if (s.startsWith("package:")) {
+                    Log.d(TAG, "find package name:" + s);
+                    String packageName = s.substring(8);
+                    currentPkg.postValue(packageName.trim());
+                }
+                if (Objects.equals(s, ">>>")) {
+                    inbase64 = true;
+                } else if (Objects.equals(s, "<<<")) {
+                    inbase64 = false;
+                    base64png.postValue(sb.toString());
+                    sb.setLength(0);
+                } else if (inbase64) {
+                    sb.append(s).append("\n");
+                }
+
             }
         } catch (IOException e) {
             Log.e("TEST", "Error reading output", e);
@@ -98,18 +112,16 @@ public class HelperService extends Service {
     private String script="";
     private JsHelper jsHelper = null;
     private JSONObject ctx = new JSONObject();
+    private String targetpkg = "";
 
     public void execute(String command) {
         Log.d("ADB", "execute command: " + command);
         executor.submit(() -> {
             try {
-                if (command.equals("clear")) {
-                    clearEnabled = true;
-                    return;
-                }
                 if (adbShellStream == null || adbShellStream.isClosed()) {
                     AbsAdbConnectionManager manager = AdbConnectionManager.getInstance(getApplication());
                     adbShellStream = manager.openStream(SHELL);
+                    Log.d(TAG,"new output generator thread started");
                     new Thread(outputGenerator).start();
                 }
                 try (OutputStream os = adbShellStream.openOutputStream()) {
@@ -118,7 +130,7 @@ public class HelperService extends Service {
                     os.write("\n".getBytes(StandardCharsets.UTF_8));
                 }
             } catch (Exception e) {
-                if (Objects.equals(e.getMessage(), "Not connected to ADB.")) {
+                if (Objects.equals(e.getMessage(), "Not connected to ADB.") || Objects.equals(e.getMessage(), "connect() must be called first")) {
                     goEvent(Event.ConnectADB, new JSONObject());
                 } else {
                     Log.e("TEST", "Error executing command", e);
@@ -132,31 +144,30 @@ public class HelperService extends Service {
         super.onCreate();
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         jsHelper = ((App) getApplication()).getJsHelper();
-        commandOutput.observeForever(screenCaptureObserver);
+        base64png.observeForever(screenCaptureObserver);
+        currentPkg.observeForever(packageCheckObserver);
+        createNotification();
         initTTS();
     }
 
     private void initTTS() {
-        tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
-            @Override
-            public void onInit(int status) {
-                if (status == TextToSpeech.SUCCESS) {
-                    // 设置语言（例如中文）
-                    int result = tts.setLanguage(Locale.CHINESE);
-                    if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                        // 语言数据缺失或不支持，提示用户下载
-                        Log.e("TTS", "语言不支持");
-                    } else {
-                        tts.setAudioAttributes(
-                                new AudioAttributes.Builder()
-                                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION) // 用途
-                                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH) // 内容类型
-                                        .build()
-                        );
-                    }
+        tts = new TextToSpeech(this, status -> {
+            if (status == TextToSpeech.SUCCESS) {
+                // 设置语言（例如中文）
+                int result = tts.setLanguage(Locale.CHINESE);
+                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    // 语言数据缺失或不支持，提示用户下载
+                    Log.e("TTS", "语言不支持");
                 } else {
-                    Log.e("TTS", "初始化失败");
+                    tts.setAudioAttributes(
+                            new AudioAttributes.Builder()
+                                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION) // 用途
+                                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH) // 内容类型
+                                    .build()
+                    );
                 }
+            } else {
+                Log.e("TTS", "初始化失败");
             }
         });
     }
@@ -173,20 +184,39 @@ public class HelperService extends Service {
             case ConnectADB:
                 goEvtConnect2ADB();
                 break;
+            case WaitPackage:
+                goEvtSleep(null);
+                break;
+            case CaptureScreen:
+                executeScreenCapture();
+                break;
         }
     }
 
     // 获取当前屏幕，进行OCR文字识别，调用目标函数，根据结果调度，处理异常
     private void goEvtStart() {
         if (!script.isEmpty()) {
-            executeScreenCapture();
+            executePackageCheck();
+//            executeScreenCapture();
         }
     }
 
-    private final Observer<CharSequence> screenCaptureObserver = output -> {
-        processScreenCapture(output.toString());
+    private void executePackageCheck() {
+        execute("dumpsys window | grep mCurrentFocus | awk -F'/' '{print $1}' | awk '{print $3}'| sed 's/^/package:/'");
+    }
+
+    private final Observer<CharSequence> packageCheckObserver = output -> {
+        String pkg = output.toString();
+        if (targetpkg.isEmpty() || pkg.equals(targetpkg)) {
+            goEvent(Event.CaptureScreen, new JSONObject());
+        } else {
+            Log.d(TAG, "wrong package: " + pkg + " " + targetpkg);
+            goEvent(Event.WaitPackage, new JSONObject());
+        }
     };
+    private final Observer<CharSequence> screenCaptureObserver = output -> processScreenCapture(output.toString());
     public static Bitmap decodeBase64ToBitmap(String base64String) {
+        Log.d(TAG, "decodeBase64ToBitmap, base64String length: " + base64String.length());
         try {
             // 1. Decode the Base64 string to a byte array
             byte[] imageBytes = Base64.decode(base64String, Base64.DEFAULT);
@@ -203,24 +233,21 @@ public class HelperService extends Service {
             return null;
         }
     }
-    private void processScreenCapture(String string) {
-        String[] lines = string.split("\n");
-        if (lines.length == 0 || !lines[lines.length -1].contains("$") ) return;
-        ArrayList<String> base64Lines = new ArrayList<>();
-        for (String line : lines) {
-            if (!line.contains("$") && !line.contains("|")) {
-                base64Lines.add(line);
-            }
-        }
-        if (base64Lines.isEmpty()){
-            return;
-        }
-        String base64 = String.join("", base64Lines);
-        execute("clear");
-        Log.d("TEST", "Image base64 is:" + base64.length());
+    private void processScreenCapture(String base64) {
         Bitmap bitmap = decodeBase64ToBitmap(base64);
         img2text(bitmap).thenAccept(jsonObject -> {
            Log.d("TEST", "GOT JSON:" + jsonObject.toString());
+            try {
+                String result = jsonObject.getString("result");
+                if (!result.equals("succ")) {
+                    Log.e("TEST", "识别失败");
+                    goEvent(Event.Start, new JSONObject());
+                    return;
+                }
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
+
             try {
                 ctx.put("width", jsonObject.getInt("width"));
                 ctx.put("height", jsonObject.getInt("height"));
@@ -229,13 +256,13 @@ public class HelperService extends Service {
             }
             JSONArray nodes;
             try {
-                nodes = jsonObject.getJSONArray("results");
+                nodes = jsonObject.getJSONArray("nodes");
             } catch (JSONException e) {
                 Log.e("TEST", "Error getting nodes:", e);
                 throw new RuntimeException(e);
             }
-            String runs  =  jsHelper.executeJavaScript(script + "\n" + "JSON.stringify(logic("+ctx.toString()+","+nodes.toString()+"))");
-            Log.d("TEST", "logic result:"+runs);
+            String runs  =  jsHelper.executeJavaScript(jsenv, "JSON.stringify(logic("+ctx.toString()+","+nodes+"))");
+            Log.d("TEST", "logic result:"+runs+" ctx:" + ctx.toString());
             try {
                 runLogic(new JSONObject(runs));
             } catch (JSONException e) {
@@ -254,8 +281,15 @@ public class HelperService extends Service {
                 try {
                     reason = opt.getString("reason");
                 } catch (JSONException e) {
+                    Log.e(TAG, "Error getting reason:", e);
                 }
-                Objects.requireNonNull(runOpt(opt.getString("opt"), reason, opt.getJSONObject("params"))).get();
+                JSONObject params;
+                try {
+                    params = opt.getJSONObject("params");
+                } catch (JSONException e) {
+                    params=new JSONObject();
+                }
+                Objects.requireNonNull(runOpt(opt.getString("opt"), reason, params)).get();
             }
             goEvent(Event.Start, new JSONObject());
         } catch (JSONException | ExecutionException | InterruptedException e) {
@@ -263,6 +297,7 @@ public class HelperService extends Service {
             throw new RuntimeException(e);
         }
         obj.remove("opts");
+        obj.remove("result");
         for (Iterator<String> it = obj.keys(); it.hasNext(); ) {
             String key = it.next();
             try {
@@ -275,85 +310,91 @@ public class HelperService extends Service {
 
     private CompletableFuture<Void> runOpt(String opt, String reason, JSONObject params) {
         Log.d("TEST", "runOpt: " + opt + " " + reason + " " + params.toString());
-        if (opt.equals("sleep")) {
-            try {
-                long ms = params.getLong("ms");
-                return CompletableFuture.runAsync(() -> {
-                    try {
-                        Thread.sleep(ms);
-                        Log.d("TEST", "sleep finish");
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
-            } catch (JSONException e) {
-                throw new RuntimeException(e);
-            }
-        } else if (opt.equals("click")) {
-            try {
-                int x = (int) params.getDouble("x");
-                int y = (int) params.getDouble("y");
-                execute("input tap " + x + " " + y);
+        switch (opt) {
+            case "sleep":
+                try {
+                    long ms = params.getLong("ms");
+                    return CompletableFuture.runAsync(() -> {
+                        try {
+                            Thread.sleep(ms);
+                            Log.d("TEST", "sleep finish");
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+                } catch (JSONException e) {
+                    throw new RuntimeException(e);
+                }
+            case "click":
+                try {
+                    int x = (int) params.getDouble("x");
+                    int y = (int) params.getDouble("y");
+                    execute("input tap " + x + " " + y);
+                    return CompletableFuture.completedFuture(null);
+                } catch (JSONException e) {
+                    throw new RuntimeException(e);
+                }
+            case "back":
+                execute("input keyevent 4");
                 return CompletableFuture.completedFuture(null);
-            } catch (JSONException e) {
-                throw new RuntimeException(e);
-            }
-        } else if (opt.equals("swipe")) {
-            try {
-                int x1 = (int) params.getDouble("x1");
-                int y1 = (int) params.getDouble("y1");
-                int x2 = (int) params.getDouble("x2");
-                int y2 = (int) params.getDouble("y2");
-                int duration = (int) params.getDouble("duration");
-                execute("swipe " + x1 + " " + y1 + " " + x2 + " " + y2 + " " +duration);
+            case "swipe":
+                try {
+                    int x1 = (int) params.getDouble("x1");
+                    int y1 = (int) params.getDouble("y1");
+                    int x2 = (int) params.getDouble("x2");
+                    int y2 = (int) params.getDouble("y2");
+                    int duration = (int) params.getDouble("duration");
+                    execute("input swipe " + x1 + " " + y1 + " " + x2 + " " + y2 + " " + duration);
+                    return CompletableFuture.completedFuture(null);
+                } catch (JSONException e) {
+                    throw new RuntimeException(e);
+                }
+            case "say":
+                try {
+                    tts.speak(reason, TextToSpeech.QUEUE_FLUSH, null, null);
+                    int ms = params.getInt("ms");
+                    return CompletableFuture.runAsync(() -> {
+                        try {
+                            Thread.sleep(ms);
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error speaking:", e);
+                }
+                break;
+            case "finish":
+                tts.speak("今日任务完成", TextToSpeech.QUEUE_FLUSH, null, null);
+                Log.d(TAG, "听到说话了吗？");
+                script = "";
                 return CompletableFuture.completedFuture(null);
-            } catch (JSONException e) {
-                throw new RuntimeException(e);
-            }
-        } else if (opt.equals("say")) {
-            try {
-                tts.speak(reason, TextToSpeech.QUEUE_FLUSH, null, null);
-                int ms = params.getInt("ms");
-                return CompletableFuture.runAsync(()->{
-                    try {
-                        Thread.sleep(ms);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
-            } catch (JSONException e) {
-                Log.e(TAG, "Error speaking:", e);
-            }
-        } else if (opt.equals("finish")) {
-            tts.speak("今日任务完成", TextToSpeech.QUEUE_FLUSH, null, null);
-            Log.d(TAG, "听到说话了吗？");
-            script = "";
-            return CompletableFuture.completedFuture(null);
         }
         return null;
     }
 
     private void executeScreenCapture() {
-        execute("clear");
-        execute("screencap -p | base64");
+        execute("echo \">>>\";screencap -p | base64; echo \"<<<\"");
     }
 
-    private void goEvtSleep(JSONObject params) {
-        long delay;
+    private void goEvtSleep(@Nullable JSONObject params) {
+        long delay=1000;
         try {
-            delay = params.getLong("ms");
+            if (params != null) {
+                delay = params.getLong("ms");
+            }
         } catch (JSONException e) {
-            delay = 1000;
+            Log.e(TAG, "Error getting delay:", e);
         }
-        scheduler.schedule(()->{
-            goEvent(Event.Start, new JSONObject());
-        }, delay, TimeUnit.MILLISECONDS);
+        scheduler.schedule(()-> goEvent(Event.Start, new JSONObject()), delay, TimeUnit.MILLISECONDS);
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-        commandOutput.removeObserver(screenCaptureObserver);
+        base64png.removeObserver(screenCaptureObserver);
+        currentPkg.removeObserver(packageCheckObserver);
+        clearAllNotifications();
     }
 
     private void goEvtConnect2ADB() {
@@ -393,10 +434,14 @@ public class HelperService extends Service {
         });
     }
 
+    private void clearAllNotifications() {
+        notificationManager.cancelAll();
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d("TEST", String.format("************ start command with action: %s %b", intent.getAction(), scheduledFuture == null));
         script = intent.getStringExtra("script");
+        jsenv = jsHelper.newJsIsolate();
         initRuntime();
         goEvent(Event.Start, new JSONObject());
         return START_NOT_STICKY;
@@ -404,28 +449,27 @@ public class HelperService extends Service {
 
     private void initRuntime() {
         ctx=new JSONObject();
-        String pkg =  jsHelper.executeJavaScript(script + "\n" + "pkg");
-        Log.d("TEST", "GOT PACKAGE on service: " + pkg);
+        targetpkg =  jsHelper.executeJavaScript(jsenv,script + "\n" + "pkg");
+        Log.d("TEST", "GOT PACKAGE on service: " + targetpkg);
     }
 
     private CompletableFuture<JSONObject> img2text(Bitmap bitmap) {
         CompletableFuture<JSONObject> future = new CompletableFuture<>();
         TextRecognizer textRecognizer =
                 TextRecognition.getClient(new ChineseTextRecognizerOptions.Builder().build());
+        JSONObject result = new JSONObject();
         if (bitmap != null) {
             // 创建 InputImage 对象
-            JSONObject result = new JSONObject();
             InputImage image = InputImage.fromBitmap(bitmap, 0);
             // 识别文本
             textRecognizer.process(image)
                     .addOnSuccessListener(text -> {
-                        // 处理识别结果
-                        String resultText = text.getText();
                         try {
                             result.put("width", image.getWidth());
                             result.put("height", image.getHeight());
                             JSONArray results = new JSONArray();
-                            result.put("results", results);
+                            result.put("result", "succ");
+                            result.put("nodes", results);
                             List<Text.TextBlock> textBlocks = text.getTextBlocks();
                             for (Text.TextBlock block : textBlocks) {
                                 // 获取文本块中的每一行
@@ -464,6 +508,12 @@ public class HelperService extends Service {
                         future.complete(result);
                     });
         } else {
+            try {
+                result.put("result", "无法加载图像");
+                future.complete(result);
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
             Log.e("TEST", "无法加载图像");
         }
         return future;
@@ -480,6 +530,35 @@ public class HelperService extends Service {
         handler.post(() -> Toast.makeText(getApplicationContext(), message, Toast.LENGTH_SHORT).show());
     }
 
+    private void createNotification() {
+        // 创建通知渠道（Android 8.0 及以上版本需要）
+        createNotificationChannel();
 
+        Intent back = new Intent(this, MainActivity.class);
+        back.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        PendingIntent playIntent = PendingIntent.getActivity(this, 0, back, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+
+        // 创建通知构建器
+        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(getString(R.string.app_name))
+                .setContentText("滑动小助手正在运行中...")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(playIntent)
+                .setAutoCancel(false)
+                .build();
+
+        // 启动前台服务
+        startForeground(NOTIFICATION_ID, notification);
+    }
+
+    private void createNotificationChannel() {
+        NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID,
+                "滑动通知",
+                NotificationManager.IMPORTANCE_HIGH
+        );
+        notificationManager.createNotificationChannel(channel);
+    }
 }
 
