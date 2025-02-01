@@ -368,6 +368,7 @@ public class HelperService extends Service {
                 tts.speak("今日任务完成", TextToSpeech.QUEUE_FLUSH, null, null);
                 Log.d(TAG, "听到说话了吗？");
                 script = "";
+                stopSelf();
                 return CompletableFuture.completedFuture(null);
         }
         return null;
