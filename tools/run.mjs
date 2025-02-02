@@ -82,10 +82,11 @@ while (true) {
   console.log(new Date(), "开始截屏...");
   const result = execSync(
     `adb -s ${deviceId} exec-out screencap -p | vision-ocr`
-  );
+  ).toString();
 
   const screen = JSON.parse(result);
   console.log(new Date(), "截屏成功，节点数：", screen.results.length);
+  console.log(JSON.stringify(screen));
   if (saveHistory) {
     const filePath = join(process.cwd(), `node.${new Date()}.json`);
     writeFileSync(filePath, JSON.stringify(screen, null, 2));
