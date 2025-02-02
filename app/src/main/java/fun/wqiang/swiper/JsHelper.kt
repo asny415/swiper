@@ -28,7 +28,7 @@ class JsHelper( context:Context) {
         }) { it.run() } // 使用一个简单的 Executor
     }
     fun newJsIsolate(): JavaScriptIsolate {
-        return jsSandbox!!.createIsolate();
+        return jsSandbox!!.createIsolate()
     }
     fun executeJavaScript(jsctx: JavaScriptIsolate, jsCode :String):String {
         val jsResultFuture: ListenableFuture<String> = jsctx.evaluateJavaScriptAsync(jsCode)

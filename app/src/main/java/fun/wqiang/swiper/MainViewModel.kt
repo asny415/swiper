@@ -40,13 +40,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val scripts = MutableLiveData<List<JSONObject>>()
 
     init {
+        val common = readCommonScript(application)
         val mjsScripts = readAllMjsFilesFromAssets(application)
         val scriptsList = mutableListOf<JSONObject>()
         Handler(Looper.getMainLooper()).postDelayed({
-            val jsenv = (application as App).jsHelper!!.newJsIsolate();
+            val jsenv = (application as App).jsHelper!!.newJsIsolate()
             for ((fileName, content) in mjsScripts) {
-                val code = content.replace("export ","")
-                val txt = (application as App).jsHelper!!.executeJavaScript(jsenv,"$code\n JSON.stringify({name, description, pkg, icon:''})")
+                val code =common.replace("export ","") + content.replace("export ","").replace(Regex("^import.*\\n"), "")
+
+                val txt = application.jsHelper!!.executeJavaScript(jsenv,"$code\n JSON.stringify({name, description, pkg, icon:''})")
                 Log.d("*** 脚本执行结果 ***", "$fileName:$txt")
                 val obj = JSONObject(txt)
                 obj.put("code", code)
@@ -59,6 +61,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             scripts.postValue(scriptsList)
         }, 1000)
+    }
+
+    private fun readCommonScript(context: Context): String {
+        val assetManager = context.assets
+        var result = ""
+        try {
+            val files = assetManager.list("scripts/common") // List files in the "scripts" directory
+            if (files != null) {
+                for (file in files) {
+                    if (file.endsWith(".mjs")) {
+                        val filePath = "scripts/common/$file"
+                        result += readAssetFile(context,filePath)+"\n"
+                    }
+                }
+            }
+        } catch (e: IOException) {
+            Log.e("readAllMjsFiles", "Error listing files in assets/scripts", e)
+        }
+        return result
     }
 
     private fun drawableToBitmap(drawable: Drawable): Bitmap {
@@ -103,30 +124,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             null
         }
     }
+    private fun readAssetFile(context: Context, path: String): String {
+        val assetManager = context.assets
+        val inputStream = assetManager.open(path)
+        val reader = BufferedReader(InputStreamReader(inputStream))
+        val stringBuilder = StringBuilder()
+        var line: String? = reader.readLine()
+        while (line != null) {
+            stringBuilder.append(line).append("\n")
+            line = reader.readLine()
+        }
+        reader.close()
+        return stringBuilder.toString()
+    }
     private fun readAllMjsFilesFromAssets(context: Context): Map<String, String> {
         val scripts = mutableMapOf<String, String>()
         val assetManager = context.assets
-
         try {
             val files = assetManager.list("scripts") // List files in the "scripts" directory
             if (files != null) {
                 for (file in files) {
                     if (file.endsWith(".mjs")) {
                         val filePath = "scripts/$file"
-                        try {
-                            val inputStream = assetManager.open(filePath)
-                            val reader = BufferedReader(InputStreamReader(inputStream))
-                            val stringBuilder = StringBuilder()
-                            var line: String? = reader.readLine()
-                            while (line != null) {
-                                stringBuilder.append(line).append("\n")
-                                line = reader.readLine()
-                            }
-                            reader.close()
-                            scripts[file] = stringBuilder.toString()
-                        } catch (e: IOException) {
-                            Log.e("readAllMjsFiles", "Error reading file: $filePath", e)
-                        }
+                        scripts[file] = readAssetFile(context,filePath)
                     }
                 }
             }

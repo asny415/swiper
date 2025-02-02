@@ -16,11 +16,9 @@ import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.IBinder;
-import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.util.Base64;
 import android.util.Log;
-import android.widget.Toast;
 import android.os.Handler;
 
 import androidx.annotation.Nullable;
@@ -71,7 +69,6 @@ public class HelperService extends Service {
     private static final String CHANNEL_ID = "my_service_channel";
     private final ExecutorService executor = Executors.newFixedThreadPool(3);
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-    private final Handler handler = new Handler(Looper.getMainLooper());
     private TextToSpeech tts;
     private AudioManager audioManager;
     private JavaScriptIsolate jsenv=null;
@@ -116,6 +113,8 @@ public class HelperService extends Service {
     private JsHelper jsHelper = null;
     private JSONObject ctx = new JSONObject();
     private String targetpkg = "";
+    @org.jetbrains.annotations.Nullable
+    public static final String ACTION_STOP="ACTION-STOP";
 
     public void execute(String command) {
         Log.d("ADB", "execute command: " + command);
@@ -179,6 +178,10 @@ public class HelperService extends Service {
                 Log.e("TTS", "初始化失败");
             }
         });
+    }
+
+    private void say(String text){
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, null);
     }
 
     private void goEvent(Event event, JSONObject params) {
@@ -270,7 +273,12 @@ public class HelperService extends Service {
                 throw new RuntimeException(e);
             }
             String runs  =  jsHelper.executeJavaScript(jsenv, "JSON.stringify(logic("+ctx.toString()+","+nodes+"))");
-            Log.d("TEST", "logic result:"+runs+" ctx:" + ctx.toString());
+            Log.d("TEST", "logic result:"+runs+" ctx:`" + ctx.toString()+"`");
+            if (runs.isEmpty()) {
+                say("未定义界面");
+                new Handler().postDelayed(this::stopSelf, 3000);
+                return;
+            }
             try {
                 runLogic(new JSONObject(runs));
             } catch (JSONException e) {
@@ -288,8 +296,7 @@ public class HelperService extends Service {
                 String reason = "";
                 try {
                     reason = opt.getString("reason");
-                } catch (JSONException e) {
-                    Log.e(TAG, "Error getting reason:", e);
+                } catch (JSONException ignored) {
                 }
                 JSONObject params;
                 try {
@@ -359,7 +366,7 @@ public class HelperService extends Service {
                 }
             case "say":
                 try {
-                    tts.speak(reason, TextToSpeech.QUEUE_FLUSH, null, null);
+                    say(reason);
                     int ms = params.getInt("ms");
                     return CompletableFuture.runAsync(() -> {
                         try {
@@ -373,10 +380,7 @@ public class HelperService extends Service {
                 }
                 break;
             case "finish":
-                tts.speak("今日任务完成", TextToSpeech.QUEUE_FLUSH, null, null);
-                Log.d(TAG, "听到说话了吗？");
-                script = "";
-                new Handler().postDelayed(this::stopSelf, 3000);
+                safeQuit(true);
                 return CompletableFuture.completedFuture(null);
         }
         return null;
@@ -412,6 +416,9 @@ public class HelperService extends Service {
             audioManager.setSpeakerphoneOn(false);
             audioManager.setMode(AudioManager.MODE_NORMAL);
         }
+        if (jsenv != null) {
+            jsenv.close();
+        }
     }
 
     private void goEvtConnect2ADB() {
@@ -433,13 +440,13 @@ public class HelperService extends Service {
                     connected = manager.connect(5555);
                 }
                 if (!connected) {
-                    showToast("无法连接到ADB");
+                    say("无法连接到ADB");
                     goEvent(Event.Sleep, new JSONObject().put("ms", 5000));
                 } else {
                     goEvent(Event.Start, new JSONObject());
                 }
             } catch (Exception e) {
-                showToast("连接到ADB异常");
+                say("连接到ADB异常");
                 try {
                     goEvent(Event.Sleep, new JSONObject().put("ms", 5000));
                 } catch (JSONException ex) {
@@ -457,11 +464,29 @@ public class HelperService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (Objects.equals(intent.getAction(), ACTION_STOP)) {
+            safeQuit(false);
+            return START_NOT_STICKY;
+        }
         script = intent.getStringExtra("script");
+        if (jsenv != null) {
+            jsenv.close();
+        }
         jsenv = jsHelper.newJsIsolate();
         initRuntime();
         goEvent(Event.Start, new JSONObject());
         return START_NOT_STICKY;
+    }
+
+    private void safeQuit(boolean succ) {
+        script = "";
+        if (succ) {
+            say("任务完成");
+        } else {
+            say("任务中止");
+        }
+        clearAllNotifications();
+        new Handler().postDelayed(this::stopSelf, 3000);
     }
 
     private void initRuntime() {
@@ -541,10 +566,6 @@ public class HelperService extends Service {
         // 如果您的服务需要绑定到其他组件，请在此返回 IBinder 对象
         // 否则，返回 null
         return null;
-    }
-
-    private void showToast(final String message) {
-        handler.post(() -> Toast.makeText(getApplicationContext(), message, Toast.LENGTH_SHORT).show());
     }
 
     private void createNotification() {

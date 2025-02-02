@@ -63,8 +63,6 @@ class MainActivity : ComponentActivity() {
         requestPermissionLauncher()
         viewModel = MainViewModel(application)
         viewModel!!.jsSupported = JavaScriptSandbox.isSupported()
-        val intent = Intent(this, HelperService::class.java)
-        stopService(intent);
         setContent {
             SwiperTheme {
                 var connected by remember { mutableStateOf(false) }
@@ -88,7 +86,7 @@ class MainActivity : ComponentActivity() {
                             onClickItem ={ item ->
                                 val intent = Intent(this, HelperService::class.java)
                                 intent.putExtra("script", item.getString("code"))
-                                startForegroundService(intent);
+                                startForegroundService(intent)
                                 viewModel!!.startPackage(this, item.getString("pkg"))
                             },
                             onShowDialog = {
@@ -118,6 +116,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel!!.autoConnect()
+        val intent = Intent(this, HelperService::class.java)
+        intent.setAction(HelperService.ACTION_STOP)
+        startForegroundService(intent)
     }
 }
 

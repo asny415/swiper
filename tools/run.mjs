@@ -91,10 +91,24 @@ while (true) {
     const filePath = join(process.cwd(), `node.${new Date()}.json`);
     writeFileSync(filePath, JSON.stringify(screen, null, 2));
   }
-  const { opts, ...others } = module.logic(
+  const currentPkg = execSync(
+    `adb -s ${deviceId} shell dumpsys window | grep mCurrentFocus | awk -F'/' '{print $1}' | awk '{print $3}'`
+  )
+    .toString()
+    .trim();
+  if (currentPkg != module.pkg) {
+    console.log(`包名不匹配，等待，${module.pkg} ${currentPkg}`);
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  const next = module.logic(
     { ...ctx, width: screen.imageWidth, height: screen.imageHeight },
     screen.results
   );
+  if (!next) {
+    execSync(`say 未知界面`);
+    process.exit(1);
+  }
+  const { opts, ...others } = next;
   Object.assign(ctx, others);
   for (const opt of opts) {
     await runOpt(deviceId, opt);
