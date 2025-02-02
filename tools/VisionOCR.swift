@@ -55,10 +55,10 @@ let request = VNRecognizeTextRequest { (request, error) in
             let result: [String: Any] = [
                 "text": recognizedText,
                 "boundingBox": [
-                    "x": actualBoundingBox.origin.x,
-                    "y": actualBoundingBox.origin.y,
-                    "width": actualBoundingBox.width,
-                    "height": actualBoundingBox.height
+                    "x": Int(actualBoundingBox.origin.x),
+                    "y": Int(actualBoundingBox.origin.y),
+                    "width": Int(actualBoundingBox.width),
+                    "height": Int(actualBoundingBox.height)
                 ]
             ]
             results.append(result)
