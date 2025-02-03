@@ -10,6 +10,10 @@ export function logic(ctx, nodes) {
     op.button("取消进入") ||
     op.say("请进行验证", "等待人工验证") ||
     op.back("支付宝祝你", "四时平安卡") ||
+    op.back("立即添加", "添加直播广场") ||
+    op.back("立即关注") ||
+    op.back("更多直播") ||
+    op.back("人看过", "直播中") ||
     op.finish("明日可领") ||
     op.swipeUp("发现", Math.random() * 3000 + 3000) ||
     op.swipeUp("直播", Math.random() * 3000 + 3000) ||

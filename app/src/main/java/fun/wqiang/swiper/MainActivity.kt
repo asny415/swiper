@@ -118,7 +118,7 @@ class MainActivity : ComponentActivity() {
         viewModel!!.autoConnect()
         val intent = Intent(this, HelperService::class.java)
         intent.setAction(HelperService.ACTION_STOP)
-        startForegroundService(intent)
+        startService(intent)
     }
 }
 

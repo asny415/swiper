@@ -105,9 +105,17 @@ while (true) {
     screen.results
   );
   if (!next) {
-    execSync(`say 未知界面`);
-    process.exit(1);
+    ctx.unknown = (ctx.unknown || 0) + 1;
+    if (ctx.unknown >= 3) {
+      execSync(`say 未知界面`);
+      process.exit(1);
+    } else {
+      console.log(`未知界面第 ${ctx.unknown} 次，等待 ...`);
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    continue;
   }
+  ctx.unknown = 0;
   const { opts, ...others } = next;
   Object.assign(ctx, others);
   for (const opt of opts) {

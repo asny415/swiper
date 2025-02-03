@@ -8,7 +8,6 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-
     <application
         android:name=".App"
         android:allowBackup="true"
@@ -35,7 +34,8 @@
             android:foregroundServiceType="dataSync"
             android:exported="false" />
         <receiver android:name=".PairReceiver"
-            android:exported="true">
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
             <intent-filter>
                 <action android:name="fun.wqiang.swiper.pair" />
             </intent-filter>

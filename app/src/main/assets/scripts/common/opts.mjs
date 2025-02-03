@@ -37,7 +37,7 @@ export function back(ctx, nodes, text, reason) {
         opts: [
           {
             opt: "back",
-            reason,
+            reason: reason || text,
           },
           { opt: "sleep", params: { ms: 3000 } },
         ],

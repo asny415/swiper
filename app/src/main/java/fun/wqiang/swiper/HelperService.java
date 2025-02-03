@@ -115,6 +115,7 @@ public class HelperService extends Service {
     private String targetpkg = "";
     @org.jetbrains.annotations.Nullable
     public static final String ACTION_STOP="ACTION-STOP";
+    private int unknown = 0;
 
     public void execute(String command) {
         Log.d("ADB", "execute command: " + command);
@@ -148,7 +149,6 @@ public class HelperService extends Service {
         jsHelper = ((App) getApplication()).getJsHelper();
         base64png.observeForever(screenCaptureObserver);
         currentPkg.observeForever(packageCheckObserver);
-        createNotification();
         initTTS();
     }
 
@@ -275,10 +275,17 @@ public class HelperService extends Service {
             String runs  =  jsHelper.executeJavaScript(jsenv, "JSON.stringify(logic("+ctx.toString()+","+nodes+"))");
             Log.d("TEST", "logic result:"+runs+" ctx:`" + ctx.toString()+"`");
             if (runs.isEmpty()) {
-                say("未定义界面");
-                new Handler().postDelayed(this::stopSelf, 3000);
+                unknown++;
+                if (unknown >= 3) {
+                    say("未定义界面");
+                    new Handler().postDelayed(this::stopSelf, 3000);
+                } else {
+                    Log.d(TAG, "第" + unknown + "次未定义界面，等待 ...");
+                    new Handler().postDelayed(()-> goEvent(Event.Start, new JSONObject()), 2000);
+                }
                 return;
             }
+            unknown = 0;
             try {
                 runLogic(new JSONObject(runs));
             } catch (JSONException e) {
@@ -468,6 +475,7 @@ public class HelperService extends Service {
             safeQuit(false);
             return START_NOT_STICKY;
         }
+        createNotification();
         script = intent.getStringExtra("script");
         if (jsenv != null) {
             jsenv.close();
