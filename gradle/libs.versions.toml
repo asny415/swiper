@@ -1,6 +1,7 @@
 [versions]
 activityKtx = "1.9.3"
 agp = "8.7.3"
+duktapeAndroid = "1.4.0"
 guava = "32.1.2-android"
 hiddenapibypass = "4.3"
 javascriptengine = "1.0.0-beta01"
@@ -23,6 +24,7 @@ androidx-activity-ktx = { module = "androidx.activity:activity-ktx", version.ref
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-javascriptengine = { module = "androidx.javascriptengine:javascriptengine", version.ref = "javascriptengine" }
 androidx-runtime-livedata = { module = "androidx.compose.runtime:runtime-livedata" }
+duktape-android = { module = "com.squareup.duktape:duktape-android", version.ref = "duktapeAndroid" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 hiddenapibypass = { module = "org.lsposed.hiddenapibypass:hiddenapibypass", version.ref = "hiddenapibypass" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }

@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "fun.wqiang.swiper"
-        minSdk = 26
+        minSdk = 25
         35.also { targetSdk = it }
         versionCode = 2
         versionName = "1.1"
@@ -47,7 +47,6 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.javascriptengine)
     implementation(libs.guava)
     implementation(libs.mlkit.text.recognition)
     implementation(libs.text.recognition.chinese)
@@ -60,6 +59,7 @@ dependencies {
     implementation(libs.androidx.runtime.livedata)
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.lifecycle.process)
+    implementation(files("libs/quickjs-android-0.2.1.aar"))
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

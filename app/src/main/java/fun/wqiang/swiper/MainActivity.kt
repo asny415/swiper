@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -45,7 +46,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
-import androidx.javascriptengine.JavaScriptSandbox
 import `fun`.wqiang.swiper.ui.theme.SwiperTheme
 import org.json.JSONObject
 import android.util.Base64
@@ -62,7 +62,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         requestPermissionLauncher()
         viewModel = MainViewModel(application)
-        viewModel!!.jsSupported = JavaScriptSandbox.isSupported()
         setContent {
             SwiperTheme {
                 var connected by remember { mutableStateOf(false) }
@@ -84,9 +83,14 @@ class MainActivity : ComponentActivity() {
                     Greeting(
                         vm = GreetingDataModel(connected, pairPort, scripts = scripts,
                             onClickItem ={ item ->
+                                viewModel!!.disconnect()
                                 val intent = Intent(this, HelperService::class.java)
                                 intent.putExtra("script", item.getString("code"))
-                                startForegroundService(intent)
+                                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
+                                    startForegroundService(intent)
+                                } else {
+                                    startService(intent)
+                                }
                                 viewModel!!.startPackage(this, item.getString("pkg"))
                             },
                             onShowDialog = {

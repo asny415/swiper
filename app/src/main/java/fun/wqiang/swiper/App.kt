@@ -14,12 +14,11 @@ class App  : Application() {
         super.onCreate()
         PRNGFixes.apply()
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true)
-        jsHelper = JsHelper(this)
+        jsHelper = JsHelper()
     }
 
     override fun onTerminate() {
         super.onTerminate()
-        jsHelper?.close()
     }
 
     override fun attachBaseContext(base: Context?) {

@@ -23,7 +23,6 @@ import android.os.Handler;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
-import androidx.javascriptengine.JavaScriptIsolate;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 
@@ -52,6 +51,7 @@ import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions;
+import com.shiqi.quickjs.JSContext;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -71,7 +71,6 @@ public class HelperService extends Service {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private TextToSpeech tts;
     private AudioManager audioManager;
-    private JavaScriptIsolate jsenv=null;
 
 
     @Nullable
@@ -79,6 +78,7 @@ public class HelperService extends Service {
     private final MutableLiveData<CharSequence> base64png = new MutableLiveData<>();
     private final MutableLiveData<CharSequence> currentPkg = new MutableLiveData<>();
     private NotificationManager notificationManager;
+    private AbsAdbConnectionManager manager;
     private final Runnable outputGenerator = () -> {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(adbShellStream.openInputStream()))) {
             StringBuilder sb = new StringBuilder();
@@ -89,9 +89,14 @@ public class HelperService extends Service {
                     Log.d(TAG, "outputGenerator: " + s);
                 }
                 if (s.startsWith("package:")) {
-                    Log.d(TAG, "find package name:" + s);
-                    String packageName = s.substring(8);
-                    currentPkg.postValue(packageName.trim());
+                    String pkgline = s.substring(8).trim();
+                    String[] pieces = pkgline.split(" ");
+                    String packageName ="unknown";
+                    if (pieces.length == 3) {
+                        packageName = pieces[2].split("/")[0];
+                    }
+                    Log.d(TAG, "find package name:" + packageName);
+                    currentPkg.postValue(packageName);
                 }
                 if (Objects.equals(s, ">>>")) {
                     inbase64 = true;
@@ -116,13 +121,13 @@ public class HelperService extends Service {
     @org.jetbrains.annotations.Nullable
     public static final String ACTION_STOP="ACTION-STOP";
     private int unknown = 0;
+    private JSContext jsenv;
 
     public void execute(String command) {
         Log.d("ADB", "execute command: " + command);
         executor.submit(() -> {
             try {
                 if (adbShellStream == null || adbShellStream.isClosed()) {
-                    AbsAdbConnectionManager manager = AdbConnectionManager.getInstance(getApplication());
                     adbShellStream = manager.openStream(SHELL);
                     Log.d(TAG,"new output generator thread started");
                     new Thread(outputGenerator).start();
@@ -134,6 +139,7 @@ public class HelperService extends Service {
                 }
             } catch (Exception e) {
                 if (Objects.equals(e.getMessage(), "Not connected to ADB.") || Objects.equals(e.getMessage(), "connect() must be called first")) {
+                    Log.e("TEST", "Error ADB", e);
                     goEvent(Event.ConnectADB, new JSONObject());
                 } else {
                     Log.e("TEST", "Error executing command", e);
@@ -145,10 +151,9 @@ public class HelperService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        manager = AdbConnectionManager.getInstance(this);
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         jsHelper = ((App) getApplication()).getJsHelper();
-        base64png.observeForever(screenCaptureObserver);
-        currentPkg.observeForever(packageCheckObserver);
         initTTS();
     }
 
@@ -213,10 +218,11 @@ public class HelperService extends Service {
     }
 
     private void executePackageCheck() {
-        execute("dumpsys window | grep mCurrentFocus | awk -F'/' '{print $1}' | awk '{print $3}'| sed 's/^/package:/'");
+        execute("dumpsys window | grep -E 'mCurrentFocus' | sed 's/^/package:/'");
     }
 
     private final Observer<CharSequence> packageCheckObserver = output -> {
+        Log.d(TAG, "packageCheckObserver:" + output.toString());
         String pkg = output.toString();
         if (targetpkg.isEmpty() || pkg.equals(targetpkg)) {
             goEvent(Event.CaptureScreen, new JSONObject());
@@ -414,6 +420,7 @@ public class HelperService extends Service {
         super.onDestroy();
         base64png.removeObserver(screenCaptureObserver);
         currentPkg.removeObserver(packageCheckObserver);
+        Log.d(TAG, "unobserve base64 and packname");
         clearAllNotifications();
         if (tts != null) {
             tts.stop();
@@ -426,6 +433,11 @@ public class HelperService extends Service {
         if (jsenv != null) {
             jsenv.close();
         }
+        try {
+            manager.disconnect();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private void goEvtConnect2ADB() {
@@ -435,6 +447,7 @@ public class HelperService extends Service {
                 manager = AdbConnectionManager.getInstance(getApplication());
                 boolean connected = false;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    Log.d(TAG, "Version R connect with dynamic port!");
                     try {
                         connected = manager.autoConnect(getApplication(), 5000);
                     } catch (AdbPairingRequiredException e) {
@@ -444,14 +457,14 @@ public class HelperService extends Service {
                     }
                 }
                 if (!connected) {
+                    Log.d(TAG, "try connect to 5555!");
                     connected = manager.connect(5555);
                 }
+                Log.d(TAG, "connect result is:" + connected);
                 if (!connected) {
                     say("无法连接到ADB");
-                    goEvent(Event.Sleep, new JSONObject().put("ms", 5000));
-                } else {
-                    goEvent(Event.Start, new JSONObject());
                 }
+                goEvent(Event.Sleep, new JSONObject().put("ms", 2000));
             } catch (Exception e) {
                 say("连接到ADB异常");
                 try {
@@ -475,12 +488,15 @@ public class HelperService extends Service {
             safeQuit(false);
             return START_NOT_STICKY;
         }
+        base64png.observeForever(screenCaptureObserver);
+        currentPkg.observeForever(packageCheckObserver);
+        Log.d(TAG, "observe base64 and packname");
         createNotification();
         script = intent.getStringExtra("script");
         if (jsenv != null) {
             jsenv.close();
         }
-        jsenv = jsHelper.newJsIsolate();
+        jsenv = jsHelper.newJsEnv();
         initRuntime();
         goEvent(Event.Start, new JSONObject());
         return START_NOT_STICKY;
@@ -599,12 +615,14 @@ public class HelperService extends Service {
     }
 
     private void createNotificationChannel() {
-        NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID,
-                "滑动通知",
-                NotificationManager.IMPORTANCE_HIGH
-        );
-        notificationManager.createNotificationChannel(channel);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID,
+                    "滑动通知",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            notificationManager.createNotificationChannel(channel);
+        }
     }
 }
 

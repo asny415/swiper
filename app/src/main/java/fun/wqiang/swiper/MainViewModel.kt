@@ -30,7 +30,6 @@ import android.util.Base64
 
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-    var jsSupported: Boolean = false
     private val executor = Executors.newFixedThreadPool(3)
     val running = MutableLiveData<Boolean>()
     val connected = MutableLiveData<Boolean>()
@@ -38,13 +37,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val needPair = MutableLiveData<Boolean>()
     private val pairPort = MutableLiveData<Int>()
     private val scripts = MutableLiveData<List<JSONObject>>()
+    private val manager:AbsAdbConnectionManager = AdbConnectionManager(getApplication())
 
     init {
         val common = readCommonScript(application)
         val mjsScripts = readAllMjsFilesFromAssets(application)
         val scriptsList = mutableListOf<JSONObject>()
         Handler(Looper.getMainLooper()).postDelayed({
-            val jsenv = (application as App).jsHelper!!.newJsIsolate()
+            val jsenv = (application as App).jsHelper!!.newJsEnv()
             for ((fileName, content) in mjsScripts) {
                 val code =common.replace("export ","") + content.replace("export ","").replace(Regex("^import.*\\n"), "")
 
@@ -60,6 +60,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             scripts.postValue(scriptsList)
+            jsenv.close()
         }, 1000)
     }
 
@@ -211,7 +212,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun autoConnectInternal(){
-        val manager:AbsAdbConnectionManager = AdbConnectionManager(getApplication())
         var conn = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
@@ -246,5 +246,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (launchIntent != null) {
             context.startActivity(launchIntent)
         }
+    }
+
+    fun disconnect() {
+        manager.disconnect()
     }
 }
