@@ -283,6 +283,7 @@ public class HelperService extends Service {
             if (runs.isEmpty()) {
                 unknown++;
                 if (unknown >= 3) {
+                    Log.d(TAG, "未定义界面超过3次，退出");
                     say("未定义界面");
                     new Handler().postDelayed(this::stopSelf, 3000);
                 } else {

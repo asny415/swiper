@@ -15,10 +15,8 @@ import io.github.muntashirakon.adb.AdbPairingRequiredException
 import io.github.muntashirakon.adb.android.AdbMdns
 import io.github.muntashirakon.adb.android.AndroidUtils
 import org.json.JSONObject
-import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
 import java.io.IOException
-import java.io.InputStreamReader
 import java.net.InetAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -27,7 +25,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.util.Base64
-
+import java.io.File
+import java.io.FileOutputStream
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val executor = Executors.newFixedThreadPool(3)
@@ -40,12 +39,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val manager:AbsAdbConnectionManager = AdbConnectionManager(getApplication())
 
     init {
+        ensureScriptsDirectory(application)
         val common = readCommonScript(application)
-        val mjsScripts = readAllMjsFilesFromAssets(application)
+        val mjsScripts = readAllScripts(application)
         val scriptsList = mutableListOf<JSONObject>()
         Handler(Looper.getMainLooper()).postDelayed({
-            val jsenv = (application as App).jsHelper!!.newJsEnv()
             for ((fileName, content) in mjsScripts) {
+                val jsenv = (application as App).jsHelper!!.newJsEnv()
                 val code =common.replace("export ","") + content.replace("export ","").replace(Regex("^import.*\\n"), "")
 
                 val txt = application.jsHelper!!.executeJavaScript(jsenv,"$code\n JSON.stringify({name, description, pkg, icon:''})")
@@ -58,27 +58,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     obj.put("icon", drawableToBase64(icon))
                     scriptsList.add(obj)
                 }
+                jsenv.close()
             }
             scripts.postValue(scriptsList)
-            jsenv.close()
         }, 1000)
     }
 
     private fun readCommonScript(context: Context): String {
-        val assetManager = context.assets
+        val files = listMjsFiles(context, "scripts/common")
         var result = ""
-        try {
-            val files = assetManager.list("scripts/common") // List files in the "scripts" directory
-            if (files != null) {
-                for (file in files) {
-                    if (file.endsWith(".mjs")) {
-                        val filePath = "scripts/common/$file"
-                        result += readAssetFile(context,filePath)+"\n"
-                    }
-                }
-            }
-        } catch (e: IOException) {
-            Log.e("readAllMjsFiles", "Error listing files in assets/scripts", e)
+        for (file in files) {
+            val filePath = "scripts/common/${file.name}"
+            result += readTextFile(context,filePath)+"\n"
         }
         return result
     }
@@ -125,36 +116,104 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             null
         }
     }
-    private fun readAssetFile(context: Context, path: String): String {
-        val assetManager = context.assets
-        val inputStream = assetManager.open(path)
-        val reader = BufferedReader(InputStreamReader(inputStream))
-        val stringBuilder = StringBuilder()
-        var line: String? = reader.readLine()
-        while (line != null) {
-            stringBuilder.append(line).append("\n")
-            line = reader.readLine()
+
+    fun readTextFile(context: Context, filePath: String): String? {
+        return try {
+            File(context.filesDir, filePath).takeIf { it.exists() }?.readText()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
-        reader.close()
-        return stringBuilder.toString()
     }
-    private fun readAllMjsFilesFromAssets(context: Context): Map<String, String> {
-        val scripts = mutableMapOf<String, String>()
-        val assetManager = context.assets
+
+//    private fun readAssetFile(context: Context, path: String): String {
+//        val assetManager = context.assets
+//        val inputStream = assetManager.open(path)
+//        val reader = BufferedReader(InputStreamReader(inputStream))
+//        val stringBuilder = StringBuilder()
+//        var line: String? = reader.readLine()
+//        while (line != null) {
+//            stringBuilder.append(line).append("\n")
+//            line = reader.readLine()
+//        }
+//        reader.close()
+//        return stringBuilder.toString()
+//    }
+    private fun ensureScriptsDirectory(context: Context) {
+        val targetDir = File(context.filesDir, "scripts")
+
+        // 如果目录不存在则创建
+        if (!targetDir.exists()) {
+            targetDir.mkdirs()
+            copyAssetsRecursively(context.assets, "scripts", targetDir)
+        }
+    }
+
+    private fun copyAssetsRecursively(assetManager: android.content.res.AssetManager, assetPath: String, targetDir: File) {
         try {
-            val files = assetManager.list("scripts") // List files in the "scripts" directory
-            if (files != null) {
+            // 获取 assets 中的文件列表
+            val files = assetManager.list(assetPath)
+            if (files.isNullOrEmpty()) {
+                // 如果是文件则直接复制
+                assetManager.open(assetPath).use { input ->
+                    FileOutputStream(File(targetDir, assetPath.substringAfterLast('/'))).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            } else {
+                // 如果是目录则递归处理
                 for (file in files) {
-                    if (file.endsWith(".mjs")) {
-                        val filePath = "scripts/$file"
-                        scripts[file] = readAssetFile(context,filePath)
+                    val srcPath = if (assetPath.isEmpty()) file else "$assetPath/$file"
+                    val destFile = File(targetDir, file)
+
+                    if (assetManager.list(srcPath)?.isNotEmpty() == true) {
+                        // 创建子目录并递归复制
+                        destFile.mkdirs()
+                        copyAssetsRecursively(assetManager, srcPath, destFile)
+                    } else {
+                        // 复制文件
+                        assetManager.open(srcPath).use { input ->
+                            FileOutputStream(destFile).use { output ->
+                                input.copyTo(output)
+                            }
+                        }
                     }
                 }
             }
         } catch (e: IOException) {
-            Log.e("readAllMjsFiles", "Error listing files in assets/scripts", e)
+            e.printStackTrace()
         }
+    }
 
+    fun listMjsFiles(context: Context, path: String): List<File> {
+        val targetDir = File(context.filesDir, path)
+
+        return when {
+            // 检查目录是否存在
+            !targetDir.exists() -> {
+                println("[警告] 目录不存在: ${targetDir.absolutePath}")
+                emptyList()
+            }
+            // 验证是否为目录
+            !targetDir.isDirectory -> {
+                println("[错误] 路径不是目录: ${targetDir.absolutePath}")
+                emptyList()
+            }
+            // 执行文件过滤
+            else -> {
+                targetDir.listFiles { _, name ->
+                    name?.endsWith(".mjs", ignoreCase = true) == true
+                }?.toList() ?: emptyList()
+            }
+        }.filter { it.isFile } // 二次验证确保是文件
+    }
+
+    private fun readAllScripts(context: Context): Map<String, String> {
+        val scripts = mutableMapOf<String, String>()
+        val files = listMjsFiles(context, "scripts")
+        for (file in files) {
+            scripts[file.name] = readTextFile(context, "scripts/" + file.name)!!
+        }
         return scripts
     }
 

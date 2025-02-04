@@ -1,9 +1,10 @@
 import * as alipay from "../app/src/main/assets/scripts/alipay.mjs";
+import * as sdouyin from "../app/src/main/assets/scripts/sdouyin.mjs";
 import { execSync } from "child_process";
 import { writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 
-const modules = { alipay };
+const modules = { alipay, sdouyin };
 let args = process.argv;
 let targetDevice = "";
 let saveHistory = false;
