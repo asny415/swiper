@@ -44,6 +44,7 @@ import org.json.JSONObject
 import android.util.Base64
 import android.util.Log
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.ExperimentalMaterialApi
@@ -57,9 +58,30 @@ import `fun`.wqiang.swiper.ui.theme.SwiperTheme
 //noinspection UsingMaterialAndMaterial3Libraries
 import androidx.compose.material.DismissDirection
 //noinspection UsingMaterialAndMaterial3Libraries
+import androidx.compose.material.Surface
+//noinspection UsingMaterialAndMaterial3Libraries
 import androidx.compose.material.SwipeToDismiss
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Settings
 //noinspection UsingMaterialAndMaterial3Libraries
 import androidx.compose.material.rememberDismissState
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme.colorScheme
+import androidx.compose.material3.MaterialTheme.typography
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var viewModel: MainViewModel? = null
@@ -71,47 +93,42 @@ class MainActivity : ComponentActivity() {
         viewModel = MainViewModel(application)
         ActivityUtils(this, viewModel!!).handleReceivedFile(intent)
         setContent {
-            SwiperTheme  {
-                var connected by remember { mutableStateOf(false) }
-                var running by remember { mutableStateOf(false) }
-                var pairPort by remember { mutableStateOf("") }
-                var scripts by remember { mutableStateOf(listOf<JSONObject>()) }
-                viewModel!!.connected.observe(this) {
-                    Log.d("TEST", "connected: $it")
-                    connected = it
-                }
-                viewModel!!.running.observe(this) {
-                    running = it
-                }
-                viewModel!!.watchPairingPort().observe(this) { port ->
-                    pairPort = if (port != -1) "$port" else ""
-                }
-                viewModel!!.watchScripts().observe(this) { scripts = it }
-                val gvm = GreetingDataModel(connected, pairPort, scripts = scripts,
-                    onDeletedItem = { item ->
-                        ActivityUtils(this, viewModel!!).unlinkFile(item.getString("filename"))
-                    },
-                    onClickItem = { item ->
-                        viewModel!!.disconnect()
-                        val intent = Intent(this, HelperService::class.java)
-                        intent.putExtra("script", item.getString("code"))
-                        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
-                            startForegroundService(intent)
-                        } else {
-                            startService(intent)
-                        }
-                        viewModel!!.startPackage(this, item.getString("pkg"))
-                    },
-                    onShowDialog = {
-                        viewModel!!.getPairingPort()
-                    }, onPair = { port, pairCode ->
-                        viewModel!!.pair(port, pairCode)
-                    })
-                Scaffold(modifier = Modifier.fillMaxSize()){
-                        paddingValues ->
-                    Greeting(gvm, modifier = Modifier.fillMaxSize().padding(paddingValues))
-                }
+            var connected by remember { mutableStateOf(false) }
+            var running by remember { mutableStateOf(false) }
+            var pairPort by remember { mutableStateOf("") }
+            var scripts by remember { mutableStateOf(listOf<JSONObject>()) }
+            viewModel!!.connected.observe(this) {
+                Log.d("TEST", "connected: $it")
+                connected = it
             }
+            viewModel!!.running.observe(this) {
+                running = it
+            }
+            viewModel!!.watchPairingPort().observe(this) { port ->
+                pairPort = if (port != -1) "$port" else ""
+            }
+            viewModel!!.watchScripts().observe(this) { scripts = it }
+            val gvm = GreetingDataModel(connected, pairPort, scripts = scripts,
+                onDeletedItem = { item ->
+                    ActivityUtils(this, viewModel!!).unlinkFile(item.getString("filename"))
+                },
+                onClickItem = { item ->
+                    viewModel!!.disconnect()
+                    val intent = Intent(this, HelperService::class.java)
+                    intent.putExtra("script", item.getString("code"))
+                    if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
+                        startForegroundService(intent)
+                    } else {
+                        startService(intent)
+                    }
+                    viewModel!!.startPackage(this, item.getString("pkg"))
+                },
+                onShowDialog = {
+                    viewModel!!.getPairingPort()
+                }, onPair = { port, pairCode ->
+                    viewModel!!.pair(port, pairCode)
+                })
+            SwiperApp(gvm)
         }
     }
 
@@ -135,6 +152,63 @@ class MainActivity : ComponentActivity() {
         intent.setAction(HelperService.ACTION_STOP)
         startService(intent)
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SwiperApp(gvm: GreetingDataModel) {
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val localContext = LocalContext.current
+    val items = listOf("Home", "Favorites", "Settings")
+    val icons = listOf(Icons.Default.Home, Icons.Default.Favorite, Icons.Default.Settings)
+    val (selectedItem, setSelectedItem) = remember { mutableStateOf(items[0]) }
+    SwiperTheme  {
+        Surface(modifier = Modifier.fillMaxSize(), color = colorScheme.background) {
+            ModalNavigationDrawer(drawerState = drawerState,drawerContent = {
+            ModalDrawerSheet {
+                // 抽屉头部
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp),
+                ) {
+                    Text(localContext.getString(R.string.app_name), style = typography.headlineMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("一站式脚本管理工具", style = typography.bodyLarge)
+                }
+
+                // 抽屉项列表
+                items.forEachIndexed { index, item ->
+                    NavigationDrawerItem(
+                        icon = { Icon(icons[index], contentDescription = null) },
+                        label = { Text(item) },
+                        selected = item == selectedItem,
+                        onClick = {
+                            setSelectedItem(item)
+                            scope.launch { drawerState.close() }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
+                }
+            }
+
+            }){
+                Scaffold(modifier = Modifier.fillMaxSize(),topBar = {
+                    TopAppBar(
+                        title = { Text(selectedItem) },
+                        navigationIcon = {
+                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                Icon(Icons.Default.Menu, contentDescription = "打开菜单")
+                            }
+                        }
+                    )
+                }){
+                        paddingValues ->
+                    Greeting(gvm, modifier = Modifier.fillMaxSize().padding(paddingValues))
+                }
+            }
+        }
+        }
 }
 
 @Composable
@@ -201,15 +275,12 @@ fun Greeting(vm:GreetingDataModel, modifier: Modifier = Modifier) {
 @Preview(showBackground = true)
 @Composable
 fun GreetingPreview() {
-    SwiperTheme {
-        Scaffold(modifier = Modifier.fillMaxSize()) { paddingValues->
-            Greeting(GreetingDataModel(connected = false, pairPort = "1234", scripts = List(1){listOf("""{
+    SwiperApp(GreetingDataModel(connected = true, pairPort = "1234", scripts = List(1){listOf("""{
             |"name":"支付宝视频脚本",
             |"package": "test.test.test",
             |"description":"这是一个测试脚本",
             |"icon":""
-            |}""".trimMargin())}.flatten().map { script -> JSONObject(script) }), modifier = Modifier.fillMaxSize().padding(paddingValues))
-    }}
+            |}""".trimMargin())}.flatten().map { script -> JSONObject(script) }))
 }
 
 fun base64ToImageBitmap(base64String: String): ImageBitmap {
