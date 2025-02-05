@@ -484,7 +484,7 @@ public class HelperService extends Service {
     private void safeQuit(boolean succ) {
         if (succ && !script.isEmpty()) {
             say("任务完成").thenAccept(aVoid -> stopSelf());
-        } else {
+        } else if (!script.isEmpty()){
             say("任务中止").thenAccept(aVoid -> stopSelf());
         }
         script = "";

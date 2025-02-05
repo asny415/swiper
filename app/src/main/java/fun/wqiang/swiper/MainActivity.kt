@@ -41,6 +41,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import android.util.Base64
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -126,7 +127,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel!!.refreshAllScripts()
-        viewModel!!.autoConnect()
+        if (viewModel!!.connected.value == false || viewModel!!.connected.value == null) {
+            Log.d("MainActivity", "onResume: ${viewModel!!.connected.value}")
+            viewModel!!.autoConnect()
+        } else {
+            Log.d("MainActivity", "onResume: ${viewModel!!.connected.value}")
+        }
         val intent = Intent(this, HelperService::class.java)
         intent.setAction(HelperService.ACTION_STOP)
         startService(intent)
