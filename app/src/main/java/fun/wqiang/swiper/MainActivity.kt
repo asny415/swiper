@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -42,11 +41,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import android.util.Base64
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ListItem
@@ -62,12 +63,16 @@ import androidx.compose.material.Surface
 //noinspection UsingMaterialAndMaterial3Libraries
 import androidx.compose.material.SwipeToDismiss
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 //noinspection UsingMaterialAndMaterial3Libraries
 import androidx.compose.material.rememberDismissState
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -77,57 +82,27 @@ import androidx.compose.material3.MaterialTheme.typography
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var viewModel: MainViewModel? = null
-
+    private var au: ActivityUtils? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestPermissionLauncher()
         viewModel = MainViewModel(application)
-        ActivityUtils(this, viewModel!!).handleReceivedFile(intent)
+        au = ActivityUtils(this, viewModel!!)
+        au!!.handleReceivedFile(intent)
         setContent {
-            var connected by remember { mutableStateOf(false) }
-            var running by remember { mutableStateOf(false) }
-            var pairPort by remember { mutableStateOf("") }
-            var scripts by remember { mutableStateOf(listOf<JSONObject>()) }
-            viewModel!!.connected.observe(this) {
-                Log.d("TEST", "connected: $it")
-                connected = it
-            }
-            viewModel!!.running.observe(this) {
-                running = it
-            }
-            viewModel!!.watchPairingPort().observe(this) { port ->
-                pairPort = if (port != -1) "$port" else ""
-            }
-            viewModel!!.watchScripts().observe(this) { scripts = it }
-            val gvm = GreetingDataModel(connected, pairPort, scripts = scripts,
-                onDeletedItem = { item ->
-                    ActivityUtils(this, viewModel!!).unlinkFile(item.getString("filename"))
-                },
-                onClickItem = { item ->
-                    viewModel!!.disconnect()
-                    val intent = Intent(this, HelperService::class.java)
-                    intent.putExtra("script", item.getString("code"))
-                    if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
-                        startForegroundService(intent)
-                    } else {
-                        startService(intent)
-                    }
-                    viewModel!!.startPackage(this, item.getString("pkg"))
-                },
-                onShowDialog = {
-                    viewModel!!.getPairingPort()
-                }, onPair = { port, pairCode ->
-                    viewModel!!.pair(port, pairCode)
-                })
+            val gvm =au!!.getGreetingDataModel()
             SwiperApp(gvm)
         }
     }
@@ -144,6 +119,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        au!!.tts!!.shutdown()
+    }
     override fun onResume() {
         super.onResume()
         viewModel!!.refreshAllScripts()
@@ -160,8 +139,8 @@ fun SwiperApp(gvm: GreetingDataModel) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val localContext = LocalContext.current
-    val items = listOf("Home", "Favorites", "Settings")
-    val icons = listOf(Icons.Default.Home, Icons.Default.Favorite, Icons.Default.Settings)
+    val items = listOf("Home",  "Settings")
+    val icons = listOf(Icons.Default.Home, Icons.Default.Settings)
     val (selectedItem, setSelectedItem) = remember { mutableStateOf(items[0]) }
     SwiperTheme  {
         Surface(modifier = Modifier.fillMaxSize(), color = colorScheme.background) {
@@ -195,7 +174,7 @@ fun SwiperApp(gvm: GreetingDataModel) {
             }){
                 Scaffold(modifier = Modifier.fillMaxSize(),topBar = {
                     TopAppBar(
-                        title = { Text(selectedItem) },
+                        title = { Text( if (selectedItem == "Home") localContext.getString(R.string.app_name) else selectedItem) },
                         navigationIcon = {
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                 Icon(Icons.Default.Menu, contentDescription = "打开菜单")
@@ -203,12 +182,145 @@ fun SwiperApp(gvm: GreetingDataModel) {
                         }
                     )
                 }){
-                        paddingValues ->
-                    Greeting(gvm, modifier = Modifier.fillMaxSize().padding(paddingValues))
+                        paddingValues ->if (selectedItem == "Home")
+                Greeting(gvm, modifier = Modifier.fillMaxSize().padding(paddingValues)) else
+                    Setting(gvm, modifier = Modifier.fillMaxSize().padding(paddingValues))
                 }
             }
         }
+    }
+}
+
+@Composable
+fun VolumeControl(gvm: GreetingDataModel) {
+    val maxVolume = gvm.maxVolumn
+    var volume by remember { mutableIntStateOf(
+        gvm.currentVolumn
+    ) }
+
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = when {
+                    volume == 0 -> Icons.Default.Clear
+                    volume < maxVolume / 2 -> Icons.Default.Add
+                    else -> Icons.Default.ArrowDropDown
+                },
+                contentDescription = null,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Text(
+                text = "媒体音量",
+                style = typography.bodyLarge,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "${(volume / maxVolume * 100)}%",
+                style = typography.bodyMedium
+            )
         }
+
+        Slider(
+            value = volume.toFloat(),
+            onValueChange = {
+                volume = it.toInt()
+                gvm.setVolumn(it.toInt())
+            },
+            valueRange = 0f..maxVolume.toFloat(),
+            steps = maxVolume - 1,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+        )
+    }
+}
+
+@Composable
+fun Setting(gvm: GreetingDataModel, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+    ) {
+        // 音量控制卡片
+        SettingCard(title = "声音设置") {
+            VolumeControl(gvm)
+        }
+
+        // 其他设置项示例
+        SettingCard(title = "通知设置") {
+            SwitchSettingItem(
+                title = "通知声音",
+                description = "开启通知提示音",
+                checked = true
+            )
+        }
+    }
+}
+
+@Composable
+fun SwitchSettingItem(
+    title: String,
+    description: String,
+    checked: Boolean
+) {
+    var enabled by remember { mutableStateOf(checked) }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+    ) {
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = title,
+                style = typography.bodyLarge
+            )
+            Text(
+                text = description,
+                style = typography.bodyMedium,
+                color = colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(
+            checked = enabled,
+            onCheckedChange = { enabled = it }
+        )
+    }
+}
+
+@Composable
+fun SettingCard(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = colorScheme.surfaceVariant,
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = title,
+                style = typography.titleMedium,
+                color = colorScheme.primary
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+            content()
+        }
+    }
 }
 
 @Composable
@@ -275,7 +387,10 @@ fun Greeting(vm:GreetingDataModel, modifier: Modifier = Modifier) {
 @Preview(showBackground = true)
 @Composable
 fun GreetingPreview() {
-    SwiperApp(GreetingDataModel(connected = true, pairPort = "1234", scripts = List(1){listOf("""{
+    SwiperApp(GreetingDataModel(connected = true, pairPort = "1234",
+        currentVolumn = 10,
+        maxVolumn = 100,
+        scripts = List(1){listOf("""{
             |"name":"支付宝视频脚本",
             |"package": "test.test.test",
             |"description":"这是一个测试脚本",

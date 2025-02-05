@@ -12,12 +12,9 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Rect;
-import android.media.AudioAttributes;
-import android.media.AudioManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.speech.tts.TextToSpeech;
-import android.speech.tts.UtteranceProgressListener;
 import android.util.Base64;
 import android.util.Log;
 import android.os.Handler;
@@ -36,7 +33,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -73,8 +69,6 @@ public class HelperService extends Service {
     private final ExecutorService executor = Executors.newFixedThreadPool(3);
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private TextToSpeech tts;
-    private AudioManager audioManager;
-
 
     @Nullable
     private AdbStream adbShellStream;
@@ -159,60 +153,24 @@ public class HelperService extends Service {
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         jsHelper = ((App) getApplication()).getJsHelper();
         Log.d(TAG, "onCreate called");
-        initTTS();
-    }
-
-    private void initTTS() {
-        tts = new TextToSpeech(this, status -> {
-            if (status == TextToSpeech.SUCCESS) {
-                // 设置语言（例如中文）
-                int result = tts.setLanguage(Locale.CHINESE);
-                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    // 语言数据缺失或不支持，提示用户下载
-                    Log.e("TTS", "语言不支持");
-                } else {
-                    Log.d(TAG, "设置声音属性");
-                    tts.setAudioAttributes(
-                            new AudioAttributes.Builder()
-                                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION) // 用途
-                                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH) // 内容类型
-                                    .build()
-                    );
-                    // 配置音频管理器以使用扬声器
-                    audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                    audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
-                    audioManager.setSpeakerphoneOn(true);
-                    tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-                        @Override
-                        public void onStart(String s) {
-                        }
-
-                        @Override
-                        public void onDone(String s) {
-                            CompletableFuture<Void> future = utterances.get(s);
-                            if (future != null) {
-                                future.complete(null);
-                            }
-                        }
-
-                        @Override
-                        public void onError(String s) {
-                        }
-                    });
-                }
-            } else {
-                Log.e("TTS", "初始化失败");
+        TTSHelper.initTTS(this, s -> {
+            CompletableFuture<Void> future = utterances.get(s);
+            if (future != null) {
+                future.complete(null);
             }
-        });
+            return null;
+        }).thenAccept(textToSpeech -> tts=textToSpeech);
     }
 
     private CompletableFuture<Void> say(String text) {
         String utteranceId = new Date().toString();
         utterances.put(utteranceId, new CompletableFuture<>());
-        int ttsresult = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId);
-        Log.d(TAG, "tts result:" + ttsresult+ " for text:" + text);
-        if (ttsresult<0) {
-            return CompletableFuture.completedFuture(null);
+        if (tts!=null) {
+            int ttsresult = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId);
+            Log.d(TAG, "tts result:" + ttsresult+ " for text:" + text);
+            if (ttsresult<0) {
+                return CompletableFuture.completedFuture(null);
+            }
         }
         return utterances.get(utteranceId);
     }
@@ -442,10 +400,6 @@ public class HelperService extends Service {
             tts.stop();
             tts.shutdown();
         }
-        if (audioManager != null) {
-            audioManager.setSpeakerphoneOn(false);
-            audioManager.setMode(AudioManager.MODE_NORMAL);
-        }
         if (jsenv != null) {
             jsenv.close();
         }
@@ -528,12 +482,12 @@ public class HelperService extends Service {
     }
 
     private void safeQuit(boolean succ) {
-        script = "";
-        if (succ) {
+        if (succ && !script.isEmpty()) {
             say("任务完成").thenAccept(aVoid -> stopSelf());
         } else {
             say("任务中止").thenAccept(aVoid -> stopSelf());
         }
+        script = "";
     }
 
     private void initRuntime() {

@@ -1,21 +1,36 @@
 package `fun`.wqiang.swiper
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.provider.OpenableColumns
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.io.File
 
 @Suppress("DEPRECATION")
-class ActivityUtils(private val activity: MainActivity, val viewModel: MainViewModel) {
-
-    private val TAG: String = "ActivityUtils"
+class ActivityUtils(private val activity: MainActivity, private val viewModel: MainViewModel) {
+    var tts: TextToSpeech? = null
+    private  val tAG = "ActivityUtils"
+    init {
+        TTSHelper.initTTS(activity) {}.thenAccept {
+            tts=it
+        }
+    }
 
     fun handleReceivedFile(intent: Intent?) {
         when (intent?.action) {
@@ -87,10 +102,63 @@ class ActivityUtils(private val activity: MainActivity, val viewModel: MainViewM
         }?.replace(Regex("[^a-zA-Z0-9._-]"), "_") // 清理非法字符
     }
 
-    fun unlinkFile(path: String) {
-        Log.d(TAG, "unlinkFile: $path")
+    private fun unlinkFile(path: String) {
+        Log.d(tAG, "unlinkFile: $path")
         val f = File(activity.filesDir,"scripts"+ File.separator +path)
         f.delete()
         Handler().postDelayed( { viewModel.refreshAllScripts() }, 100)
+    }
+
+    @Composable
+    fun getGreetingDataModel(): GreetingDataModel {
+        var connected by remember { mutableStateOf(false) }
+        var running by remember { mutableStateOf(false) }
+        var pairPort by remember { mutableStateOf("") }
+        var scripts by remember { mutableStateOf(listOf<JSONObject>()) }
+        viewModel.connected.observe(activity) {
+            Log.d("TEST", "connected: $it")
+            connected = it
+        }
+        viewModel.running.observe(activity) {
+            running = it
+        }
+        viewModel.watchPairingPort().observe(activity) { port ->
+            pairPort = if (port != -1) "$port" else ""
+        }
+        viewModel.watchScripts().observe(activity) { scripts = it }
+        val audioManager = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
+        val volumn = audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL)
+        return GreetingDataModel(connected, pairPort,
+        currentVolumn = volumn,
+        maxVolumn = maxVolume,
+        scripts = scripts,
+        onDeletedItem = { item ->
+            unlinkFile(item.getString("filename"))
+        },
+            setVolumn = {
+                audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, it, 0)
+                tts!!.speak("测试", TextToSpeech.QUEUE_FLUSH, null, null)
+                val sharedPreferences = activity.getSharedPreferences("Swiper", Context.MODE_PRIVATE)
+                val editor = sharedPreferences.edit()
+                editor.putInt("volumn", it)
+                editor.apply()
+            },
+        onClickItem = { item ->
+            viewModel.disconnect()
+            val intent = Intent(activity, HelperService::class.java)
+            intent.putExtra("script", item.getString("code"))
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
+                activity.startForegroundService(intent)
+            } else {
+               activity.startService(intent)
+            }
+            viewModel.startPackage(activity, item.getString("pkg"))
+        },
+        onShowDialog = {
+            viewModel.getPairingPort()
+        }, onPair = { port, pairCode ->
+            viewModel.pair(port, pairCode)
+        })
     }
 }
