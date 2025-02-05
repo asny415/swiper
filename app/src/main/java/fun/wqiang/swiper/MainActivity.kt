@@ -48,7 +48,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -65,7 +64,6 @@ import androidx.compose.material.rememberDismissState
 class MainActivity : ComponentActivity() {
     private var viewModel: MainViewModel? = null
 
-    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -109,10 +107,10 @@ class MainActivity : ComponentActivity() {
                     }, onPair = { port, pairCode ->
                         viewModel!!.pair(port, pairCode)
                     })
-                Scaffold(content = {
-                    paddingValues ->
-                    Greeting(gvm, modifier = Modifier.padding(paddingValues))
-                })
+                Scaffold(modifier = Modifier.fillMaxSize()){
+                        paddingValues ->
+                    Greeting(gvm, modifier = Modifier.fillMaxSize().padding(paddingValues))
+                }
             }
         }
     }
@@ -143,10 +141,10 @@ class MainActivity : ComponentActivity() {
 fun Greeting(vm:GreetingDataModel, modifier: Modifier = Modifier) {
     var showDialog by remember { mutableStateOf(false) }
     var pairCode by remember { mutableStateOf("") }
-    Box(contentAlignment = Alignment.Center, modifier=modifier.fillMaxWidth()){
+    Box(contentAlignment = Alignment.Center, modifier=modifier.fillMaxSize()){
         if (vm.connected) {
-            Column(modifier = Modifier.fillMaxWidth().align(Alignment.TopEnd)) {
-                LazyColumn(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.fillMaxSize().align(Alignment.TopEnd)) {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(vm.scripts) { item ->
                         MyListItem(item, onClick = {
                             vm.onClickItem(item)
@@ -204,13 +202,13 @@ fun Greeting(vm:GreetingDataModel, modifier: Modifier = Modifier) {
 @Composable
 fun GreetingPreview() {
     SwiperTheme {
-        Scaffold { paddingValues->
-            Greeting(GreetingDataModel(connected = true, pairPort = "1234", scripts = List(1){listOf("""{
+        Scaffold(modifier = Modifier.fillMaxSize()) { paddingValues->
+            Greeting(GreetingDataModel(connected = false, pairPort = "1234", scripts = List(1){listOf("""{
             |"name":"支付宝视频脚本",
             |"package": "test.test.test",
             |"description":"这是一个测试脚本",
             |"icon":""
-            |}""".trimMargin())}.flatten().map { script -> JSONObject(script) }), modifier = Modifier.fillMaxWidth().padding(paddingValues))
+            |}""".trimMargin())}.flatten().map { script -> JSONObject(script) }), modifier = Modifier.fillMaxSize().padding(paddingValues))
     }}
 }
 
