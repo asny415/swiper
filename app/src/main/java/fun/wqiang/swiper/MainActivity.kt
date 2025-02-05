@@ -131,6 +131,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        viewModel!!.refreshAllScripts()
         viewModel!!.autoConnect()
         val intent = Intent(this, HelperService::class.java)
         intent.setAction(HelperService.ACTION_STOP)
