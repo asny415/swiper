@@ -23,14 +23,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,16 +40,27 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
-import `fun`.wqiang.swiper.ui.theme.SwiperTheme
 import org.json.JSONObject
 import android.util.Base64
 import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.TopAppBar
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import `fun`.wqiang.swiper.ui.theme.SwiperTheme
+//noinspection UsingMaterialAndMaterial3Libraries
+import androidx.compose.material.DismissDirection
+//noinspection UsingMaterialAndMaterial3Libraries
+import androidx.compose.material.SwipeToDismiss
+//noinspection UsingMaterialAndMaterial3Libraries
+import androidx.compose.material.rememberDismissState
 
 class MainActivity : ComponentActivity() {
     private var viewModel: MainViewModel? = null
@@ -66,9 +71,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         requestPermissionLauncher()
         viewModel = MainViewModel(application)
-        ActivityUtils(this).handleReceivedFile(intent)
+        ActivityUtils(this, viewModel!!).handleReceivedFile(intent)
         setContent {
-            SwiperTheme {
+            SwiperTheme  {
                 var connected by remember { mutableStateOf(false) }
                 var running by remember { mutableStateOf(false) }
                 var pairPort by remember { mutableStateOf("") }
@@ -84,28 +89,30 @@ class MainActivity : ComponentActivity() {
                     pairPort = if (port != -1) "$port" else ""
                 }
                 viewModel!!.watchScripts().observe(this) { scripts = it }
-                Scaffold { innerPadding ->
-                    Greeting(
-                        vm = GreetingDataModel(connected, pairPort, scripts = scripts,
-                            onClickItem ={ item ->
-                                viewModel!!.disconnect()
-                                val intent = Intent(this, HelperService::class.java)
-                                intent.putExtra("script", item.getString("code"))
-                                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
-                                    startForegroundService(intent)
-                                } else {
-                                    startService(intent)
-                                }
-                                viewModel!!.startPackage(this, item.getString("pkg"))
-                            },
-                            onShowDialog = {
-                            viewModel!!.getPairingPort()
-                        }, onPair = { port, pairCode ->
-                            viewModel!!.pair(port, pairCode)
-                        }),
-                        modifier = Modifier.fillMaxWidth().padding(innerPadding)
-                    )
-                }
+                val gvm = GreetingDataModel(connected, pairPort, scripts = scripts,
+                    onDeletedItem = { item ->
+                        ActivityUtils(this, viewModel!!).unlinkFile(item.getString("filename"))
+                    },
+                    onClickItem = { item ->
+                        viewModel!!.disconnect()
+                        val intent = Intent(this, HelperService::class.java)
+                        intent.putExtra("script", item.getString("code"))
+                        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
+                            startForegroundService(intent)
+                        } else {
+                            startService(intent)
+                        }
+                        viewModel!!.startPackage(this, item.getString("pkg"))
+                    },
+                    onShowDialog = {
+                        viewModel!!.getPairingPort()
+                    }, onPair = { port, pairCode ->
+                        viewModel!!.pair(port, pairCode)
+                    })
+                Scaffold(content = {
+                    paddingValues ->
+                    Greeting(gvm, modifier = Modifier.padding(paddingValues))
+                })
             }
         }
     }
@@ -135,17 +142,21 @@ class MainActivity : ComponentActivity() {
 fun Greeting(vm:GreetingDataModel, modifier: Modifier = Modifier) {
     var showDialog by remember { mutableStateOf(false) }
     var pairCode by remember { mutableStateOf("") }
-    Box(contentAlignment = Alignment.Center, modifier=modifier.fillMaxSize()){
-        Column(modifier=Modifier.fillMaxWidth().align(Alignment.TopEnd)) {
-            if (vm.connected) {
-                LazyColumn(modifier=Modifier.fillMaxWidth()) {
+    Box(contentAlignment = Alignment.Center, modifier=modifier.fillMaxWidth()){
+        if (vm.connected) {
+            Column(modifier = Modifier.fillMaxWidth().align(Alignment.TopEnd)) {
+                LazyColumn(modifier = Modifier.fillMaxWidth()) {
                     items(vm.scripts) { item ->
                         MyListItem(item, onClick = {
                             vm.onClickItem(item)
+                        }, onDeletedListener = {
+                            vm.onDeletedItem(item)
                         })
                     }
                 }
-            } else {
+            }
+        } else {
+            Column{
                 Button(onClick = {
                     showDialog = true
                 }) {
@@ -188,19 +199,12 @@ fun Greeting(vm:GreetingDataModel, modifier: Modifier = Modifier) {
     }
 }
 
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
-@OptIn(ExperimentalMaterial3Api::class)
 @Preview(showBackground = true)
 @Composable
 fun GreetingPreview() {
-    val localcontext = LocalContext.current
     SwiperTheme {
-        Scaffold(topBar = {
-            TopAppBar(
-                title = { Text(localcontext.getString(R.string.app_name)) }
-            )
-        }) {paddingValues->
-            Greeting(GreetingDataModel(connected = true, pairPort = "1234", scripts = List(20){listOf("""{
+        Scaffold { paddingValues->
+            Greeting(GreetingDataModel(connected = true, pairPort = "1234", scripts = List(1){listOf("""{
             |"name":"支付宝视频脚本",
             |"package": "test.test.test",
             |"description":"这是一个测试脚本",
@@ -220,21 +224,44 @@ fun base64ToImageBitmap(base64String: String): ImageBitmap {
     }
 }
 
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
-fun MyListItem(item: JSONObject, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.padding(16.dp).clickable(onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Image(
-            bitmap = base64ToImageBitmap(item.getString("icon")),
-            contentDescription = null,
-            modifier = Modifier.size(48.dp)
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column {
-            Text(text = item.getString("name"), style = MaterialTheme.typography.titleMedium)
-            Text(text = item.getString("description"), style = MaterialTheme.typography.bodyMedium)
+fun MyListItem(item: JSONObject, onClick: () -> Unit, onDeletedListener: () -> Unit) {
+    val dismissState = rememberDismissState()
+    SwipeToDismiss(
+        state = dismissState,
+        directions = setOf(DismissDirection.EndToStart),
+        background = {
+            val color = when (dismissState.dismissDirection) {
+                DismissDirection.EndToStart -> Color.Red
+                else -> Color.Transparent
+            }
+            Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(color)
+                        .padding(16.dp),
+            contentAlignment = Alignment.CenterEnd
+            ) {
+            Text("删除")
+        }
+        },
+        dismissContent = {
+            ListItem(modifier = Modifier.background(Color.White).clickable { onClick() },
+                leadingContent = {
+                    Image(
+                bitmap = base64ToImageBitmap(item.getString("icon")),
+                contentDescription = null,
+                modifier = Modifier.size(48.dp)
+            )},
+                headlineContent = {Text(item.getString("name"))},
+                supportingContent = {Text(item.getString("description"))})
+    })
+
+    // 监听滑动状态
+    LaunchedEffect(dismissState.currentValue) {
+        if (dismissState.isDismissed(DismissDirection.EndToStart)) {
+            onDeletedListener()
         }
     }
 }

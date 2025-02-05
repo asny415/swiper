@@ -33,10 +33,10 @@
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:scheme="file"/>
-                <data android:mimeType="application/javascript"/>
-                <data android:scheme="content"/>
-                <data android:mimeType="application/javascript"/>
+                <data
+                    android:mimeType="application/javascript"
+                    />
+                <data android:mimeType="text/javascript" />
             </intent-filter>
 
             <!-- 接收分享.mjs文件请求 -->
@@ -44,6 +44,7 @@
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/javascript" />
+                <data android:mimeType="text/javascript" />
             </intent-filter>
         </activity>
         <service

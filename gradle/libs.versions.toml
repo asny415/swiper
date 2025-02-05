@@ -1,10 +1,8 @@
 [versions]
-activityKtx = "1.9.3"
+activityKtx = "1.10.0"
 agp = "8.7.3"
-duktapeAndroid = "1.4.0"
 guava = "32.1.2-android"
 hiddenapibypass = "4.3"
-javascriptengine = "1.0.0-beta01"
 kotlin = "2.0.0"
 coreKtx = "1.15.0"
 junit = "4.13.2"
@@ -12,10 +10,10 @@ junitVersion = "1.2.1"
 espressoCore = "3.6.1"
 libadbAndroid = "3.0.0"
 lifecycleRuntimeKtx = "2.8.7"
-activityCompose = "1.9.3"
-composeBom = "2024.12.01"
+activityCompose = "1.10.0"
+composeBom = "2025.01.01"
 appcompat = "1.7.0"
-material = "1.12.0"
+materialVersion = "1.7.7"
 sunSecurityAndroid = "1.1"
 lifecycleProcess = "2.8.7"
 textRecognitionVersion = "16.0.1"
@@ -23,9 +21,8 @@ textRecognitionVersion = "16.0.1"
 [libraries]
 androidx-activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activityKtx" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
-androidx-javascriptengine = { module = "androidx.javascriptengine:javascriptengine", version.ref = "javascriptengine" }
+androidx-material = { module = "androidx.compose.material:material", version.ref = "materialVersion" }
 androidx-runtime-livedata = { module = "androidx.compose.runtime:runtime-livedata" }
-duktape-android = { module = "com.squareup.duktape:duktape-android", version.ref = "duktapeAndroid" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 hiddenapibypass = { module = "org.lsposed.hiddenapibypass:hiddenapibypass", version.ref = "hiddenapibypass" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -43,7 +40,6 @@ androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 libadb-android = { module = "com.github.MuntashirAkon:libadb-android", version.ref = "libadbAndroid" }
-material = { module = "com.google.android.material:material", version.ref = "material" }
 mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "textRecognitionVersion" }
 sun-security-android = { module = "com.github.MuntashirAkon:sun-security-android", version.ref = "sunSecurityAndroid" }
 androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleProcess" }

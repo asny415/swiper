@@ -28,7 +28,7 @@ import android.util.Base64
 import java.io.File
 import java.io.FileOutputStream
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
+class MainViewModel(val app: Application) : AndroidViewModel(app) {
     private val executor = Executors.newFixedThreadPool(3)
     val running = MutableLiveData<Boolean>()
     val connected = MutableLiveData<Boolean>()
@@ -39,30 +39,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val manager:AbsAdbConnectionManager = AdbConnectionManager(getApplication())
 
     init {
-        ensureScriptsDirectory(application)
-        val common = readCommonScript(application)
-        val mjsScripts = readAllScripts(application)
-        val scriptsList = mutableListOf<JSONObject>()
         Handler(Looper.getMainLooper()).postDelayed({
-            for ((fileName, content) in mjsScripts) {
-                val jsenv = (application as App).jsHelper!!.newJsEnv()
-                val code =common.replace("export ","") + content.replace("export ","").replace(Regex("^import.*\\n"), "")
-
-                val txt = application.jsHelper!!.executeJavaScript(jsenv,"$code\n JSON.stringify({name, description, pkg, icon:''})")
-                Log.d("*** 脚本执行结果 ***", "$fileName:$txt")
-                val obj = JSONObject(txt)
-                obj.put("code", code)
-                val pkg = obj.getString("pkg")
-                val icon= getApplicationIcon(application, pkg)
-                if (icon != null) {
-                    obj.put("icon", drawableToBase64(icon))
-                    scriptsList.add(obj)
-                }
-                jsenv.close()
-            }
-            scripts.postValue(scriptsList)
+            refreshAllScripts()
         }, 1000)
     }
+
+    fun refreshAllScripts() {
+        ensureScriptsDirectory(app)
+        val common = readCommonScript(app)
+        val mjsScripts = readAllScripts(app)
+        val scriptsList = mutableListOf<JSONObject>()
+        for ((fileName, content) in mjsScripts) {
+            val jsenv = (app as App).jsHelper!!.newJsEnv()
+            val code =common.replace("export ","") + content.replace("export ","").replace(Regex("^import.*\\n"), "")
+
+            val txt = app.jsHelper!!.executeJavaScript(jsenv,"$code\n JSON.stringify({name, description, pkg, icon:''})")
+            Log.d("*** 脚本执行结果 ***", "$fileName:$txt")
+            val obj = JSONObject(txt)
+            obj.put("code", code)
+            obj.put("filename", fileName)
+            val pkg = obj.getString("pkg")
+            val icon= getApplicationIcon(app, pkg)
+            if (icon != null) {
+                obj.put("icon", drawableToBase64(icon))
+                scriptsList.add(obj)
+            }
+            jsenv.close()
+        }
+        scripts.postValue(scriptsList)    }
 
     private fun readCommonScript(context: Context): String {
         val files = listMjsFiles(context, "scripts/common")

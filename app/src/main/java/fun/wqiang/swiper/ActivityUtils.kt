@@ -3,6 +3,7 @@ package `fun`.wqiang.swiper
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
 import android.provider.OpenableColumns
 import android.util.Log
 import android.widget.Toast
@@ -12,8 +13,10 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 @Suppress("DEPRECATION")
-class ActivityUtils(private val activity: MainActivity) {
-    
+class ActivityUtils(private val activity: MainActivity, val viewModel: MainViewModel) {
+
+    private val TAG: String = "ActivityUtils"
+
     fun handleReceivedFile(intent: Intent?) {
         when (intent?.action) {
             Intent.ACTION_VIEW -> handleSingleFile(intent.data)
@@ -27,8 +30,10 @@ class ActivityUtils(private val activity: MainActivity) {
         activity.lifecycleScope.launch(Dispatchers.IO) {
             saveFileFromUri(uri)?.let { savedPath ->
                 activity.runOnUiThread {
+                    viewModel.refreshAllScripts()
                     Toast.makeText(activity,
                         "文件已保存至：$savedPath", Toast.LENGTH_LONG).show()
+
                 }
             }
         }
@@ -80,5 +85,12 @@ class ActivityUtils(private val activity: MainActivity) {
             "file" -> uri.lastPathSegment
             else -> null
         }?.replace(Regex("[^a-zA-Z0-9._-]"), "_") // 清理非法字符
+    }
+
+    fun unlinkFile(path: String) {
+        Log.d(TAG, "unlinkFile: $path")
+        val f = File(activity.filesDir,"scripts"+ File.separator +path)
+        f.delete()
+        Handler().postDelayed( { viewModel.refreshAllScripts() }, 100)
     }
 }
