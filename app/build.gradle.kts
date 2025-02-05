@@ -48,6 +48,7 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.guava)
+    implementation(libs.material)
     implementation(libs.mlkit.text.recognition)
     implementation(libs.text.recognition.chinese)
     implementation(libs.androidx.ui.tooling.preview)

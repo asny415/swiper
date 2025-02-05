@@ -117,7 +117,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun readTextFile(context: Context, filePath: String): String? {
+    private fun readTextFile(context: Context, filePath: String): String? {
         return try {
             File(context.filesDir, filePath).takeIf { it.exists() }?.readText()
         } catch (e: Exception) {
@@ -126,19 +126,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-//    private fun readAssetFile(context: Context, path: String): String {
-//        val assetManager = context.assets
-//        val inputStream = assetManager.open(path)
-//        val reader = BufferedReader(InputStreamReader(inputStream))
-//        val stringBuilder = StringBuilder()
-//        var line: String? = reader.readLine()
-//        while (line != null) {
-//            stringBuilder.append(line).append("\n")
-//            line = reader.readLine()
-//        }
-//        reader.close()
-//        return stringBuilder.toString()
-//    }
     private fun ensureScriptsDirectory(context: Context) {
         val targetDir = File(context.filesDir, "scripts")
 
@@ -185,7 +172,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun listMjsFiles(context: Context, path: String): List<File> {
+    private fun listMjsFiles(context: Context, path: String): List<File> {
         val targetDir = File(context.filesDir, path)
 
         return when {

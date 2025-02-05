@@ -29,7 +29,7 @@ public class PairReceiver extends BroadcastReceiver {
                             code == null ? "" : code);
                     Log.d("SwiperPair",  "code: " + code + ", port: " + port + ", Paired: " + pairingStatus);
                 } catch (Exception e) {
-                    Log.d("SwiperPair",  "Exception: " + e.toString() + ", code: " + code + ", port: " + port + ", Paired: false");
+                    Log.d("SwiperPair",  "Exception: " + e + ", code: " + code + ", port: " + port + ", Paired: false");
                     throw new RuntimeException(e);
                 }
              });

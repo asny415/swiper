@@ -17,6 +17,7 @@ import android.media.AudioManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.util.Base64;
 import android.util.Log;
 import android.os.Handler;
@@ -31,6 +32,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -122,6 +125,7 @@ public class HelperService extends Service {
     public static final String ACTION_STOP="ACTION-STOP";
     private int unknown = 0;
     private JSContext jsenv;
+    private final HashMap<String, CompletableFuture<Void>> utterances = new HashMap<>();
 
     public void execute(String command) {
         Log.d("ADB", "execute command: " + command);
@@ -154,6 +158,7 @@ public class HelperService extends Service {
         manager = AdbConnectionManager.getInstance(this);
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         jsHelper = ((App) getApplication()).getJsHelper();
+        Log.d(TAG, "onCreate called");
         initTTS();
     }
 
@@ -177,7 +182,23 @@ public class HelperService extends Service {
                     audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
                     audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
                     audioManager.setSpeakerphoneOn(true);
+                    tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                        @Override
+                        public void onStart(String s) {
+                        }
 
+                        @Override
+                        public void onDone(String s) {
+                            CompletableFuture<Void> future = utterances.get(s);
+                            if (future != null) {
+                                future.complete(null);
+                            }
+                        }
+
+                        @Override
+                        public void onError(String s) {
+                        }
+                    });
                 }
             } else {
                 Log.e("TTS", "初始化失败");
@@ -185,8 +206,15 @@ public class HelperService extends Service {
         });
     }
 
-    private void say(String text){
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, null);
+    private CompletableFuture<Void> say(String text) {
+        String utteranceId = new Date().toString();
+        utterances.put(utteranceId, new CompletableFuture<>());
+        int ttsresult = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId);
+        Log.d(TAG, "tts result:" + ttsresult+ " for text:" + text);
+        if (ttsresult<0) {
+            return CompletableFuture.completedFuture(null);
+        }
+        return utterances.get(utteranceId);
     }
 
     private void goEvent(Event event, JSONObject params) {
@@ -284,8 +312,7 @@ public class HelperService extends Service {
                 unknown++;
                 if (unknown >= 3) {
                     Log.d(TAG, "未定义界面超过3次，退出");
-                    say("未定义界面");
-                    new Handler().postDelayed(this::stopSelf, 3000);
+                    say("未定义界面").thenAccept(aVoid -> new Handler().postDelayed(this::stopSelf, 3000));
                 } else {
                     Log.d(TAG, "第" + unknown + "次未定义界面，等待 ...");
                     new Handler().postDelayed(()-> goEvent(Event.Start, new JSONObject()), 2000);
@@ -379,20 +406,7 @@ public class HelperService extends Service {
                     throw new RuntimeException(e);
                 }
             case "say":
-                try {
-                    say(reason);
-                    int ms = params.getInt("ms");
-                    return CompletableFuture.runAsync(() -> {
-                        try {
-                            Thread.sleep(ms);
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
-                        }
-                    });
-                } catch (JSONException e) {
-                    Log.e(TAG, "Error speaking:", e);
-                }
-                break;
+                return say(reason);
             case "finish":
                 safeQuit(true);
                 return CompletableFuture.completedFuture(null);
@@ -419,6 +433,7 @@ public class HelperService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        Log.d(TAG, "onDestroy called");
         base64png.removeObserver(screenCaptureObserver);
         currentPkg.removeObserver(packageCheckObserver);
         Log.d(TAG, "unobserve base64 and packname");
@@ -463,17 +478,25 @@ public class HelperService extends Service {
                 }
                 Log.d(TAG, "connect result is:" + connected);
                 if (!connected) {
-                    say("无法连接到ADB");
+                    say("无法连接到ADB").thenAccept(aVoid -> {
+                        try {
+                            goEvent(Event.Sleep, new JSONObject().put("ms", 2000));
+                        } catch (JSONException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+                } else {
+                    goEvent(Event.Sleep, new JSONObject().put("ms", 2000));
                 }
-                goEvent(Event.Sleep, new JSONObject().put("ms", 2000));
             } catch (Exception e) {
-                say("连接到ADB异常");
-                try {
-                    goEvent(Event.Sleep, new JSONObject().put("ms", 5000));
-                } catch (JSONException ex) {
-                    throw new RuntimeException(ex);
-                }
                 Log.d("TEST", "Error connecting to ADB", e);
+                say("连接到ADB异常").thenAccept(aVoid -> {
+                    try {
+                        goEvent(Event.Sleep, new JSONObject().put("ms", 5000));
+                    } catch (JSONException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                });
             }
 
         });
@@ -485,6 +508,7 @@ public class HelperService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.d(TAG, "onStartCommand called");
         if (Objects.equals(intent.getAction(), ACTION_STOP)) {
             safeQuit(false);
             return START_NOT_STICKY;
@@ -506,12 +530,10 @@ public class HelperService extends Service {
     private void safeQuit(boolean succ) {
         script = "";
         if (succ) {
-            say("任务完成");
+            say("任务完成").thenAccept(aVoid -> stopSelf());
         } else {
-            say("任务中止");
+            say("任务中止").thenAccept(aVoid -> stopSelf());
         }
-        clearAllNotifications();
-        new Handler().postDelayed(this::stopSelf, 3000);
     }
 
     private void initRuntime() {

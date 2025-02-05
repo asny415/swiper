@@ -33,10 +33,10 @@ import java.util.Date
 import kotlin.random.Random
 
 class AdbConnectionManager(context: Context) : AbsAdbConnectionManager() {
-    var mPrivateKey: PrivateKey? = null
-    var mCertificate: Certificate? = null
+    private var mPrivateKey: PrivateKey? = null
+    private var mCertificate: Certificate? = null
     companion object {
-        var INSTANCE: AbsAdbConnectionManager? = null
+        private var INSTANCE: AbsAdbConnectionManager? = null
         @JvmStatic
         fun getInstance(context: Context): AbsAdbConnectionManager {
             if (INSTANCE == null) {
@@ -103,7 +103,7 @@ class AdbConnectionManager(context: Context) : AbsAdbConnectionManager() {
         val os = FileOutputStream(certFile)
         os.write(X509Factory.BEGIN_CERT.toByteArray(StandardCharsets.UTF_8))
         os.write("\n".toByteArray())
-        encoder.encode(certificate.encoded, os)
+        encoder.encode(mCertificate.encoded, os)
         os.write("\n".toByteArray())
         os.write(X509Factory.END_CERT.toByteArray(StandardCharsets.UTF_8))
     }

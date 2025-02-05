@@ -53,15 +53,20 @@ import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.platform.LocalContext
 
 class MainActivity : ComponentActivity() {
     private var viewModel: MainViewModel? = null
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestPermissionLauncher()
         viewModel = MainViewModel(application)
+        ActivityUtils(this).handleReceivedFile(intent)
         setContent {
             SwiperTheme {
                 var connected by remember { mutableStateOf(false) }
@@ -79,7 +84,7 @@ class MainActivity : ComponentActivity() {
                     pairPort = if (port != -1) "$port" else ""
                 }
                 viewModel!!.watchScripts().observe(this) { scripts = it }
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                Scaffold { innerPadding ->
                     Greeting(
                         vm = GreetingDataModel(connected, pairPort, scripts = scripts,
                             onClickItem ={ item ->
@@ -98,7 +103,7 @@ class MainActivity : ComponentActivity() {
                         }, onPair = { port, pairCode ->
                             viewModel!!.pair(port, pairCode)
                         }),
-                        modifier = Modifier.padding(innerPadding)
+                        modifier = Modifier.fillMaxWidth().padding(innerPadding)
                     )
                 }
             }
@@ -131,9 +136,9 @@ fun Greeting(vm:GreetingDataModel, modifier: Modifier = Modifier) {
     var showDialog by remember { mutableStateOf(false) }
     var pairCode by remember { mutableStateOf("") }
     Box(contentAlignment = Alignment.Center, modifier=modifier.fillMaxSize()){
-        Column {
+        Column(modifier=Modifier.fillMaxWidth().align(Alignment.TopEnd)) {
             if (vm.connected) {
-                LazyColumn(modifier=modifier.fillMaxSize()) {
+                LazyColumn(modifier=Modifier.fillMaxWidth()) {
                     items(vm.scripts) { item ->
                         MyListItem(item, onClick = {
                             vm.onClickItem(item)
@@ -183,17 +188,25 @@ fun Greeting(vm:GreetingDataModel, modifier: Modifier = Modifier) {
     }
 }
 
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
+@OptIn(ExperimentalMaterial3Api::class)
 @Preview(showBackground = true)
 @Composable
 fun GreetingPreview() {
+    val localcontext = LocalContext.current
     SwiperTheme {
-        Greeting(GreetingDataModel(connected = true, pairPort = "1234", scripts = listOf("""{
+        Scaffold(topBar = {
+            TopAppBar(
+                title = { Text(localcontext.getString(R.string.app_name)) }
+            )
+        }) {paddingValues->
+            Greeting(GreetingDataModel(connected = true, pairPort = "1234", scripts = List(20){listOf("""{
             |"name":"支付宝视频脚本",
             |"package": "test.test.test",
             |"description":"这是一个测试脚本",
             |"icon":""
-            |}""".trimMargin()).map { script -> JSONObject(script) }))
-    }
+            |}""".trimMargin())}.flatten().map { script -> JSONObject(script) }), modifier = Modifier.fillMaxWidth().padding(paddingValues))
+    }}
 }
 
 fun base64ToImageBitmap(base64String: String): ImageBitmap {

@@ -6,6 +6,7 @@ export const pkg = "com.eg.android.AlipayGphone";
 export function logic(ctx, nodes) {
   const op = b({ button, say, back, finish, swipeUp }, ctx, nodes);
   return (
+    op.finish("请尽快领取") ||
     op.button("开心收下") ||
     op.button("取消进入") ||
     op.say("请进行验证", "等待人工验证") ||

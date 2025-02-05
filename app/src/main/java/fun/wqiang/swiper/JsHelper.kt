@@ -6,7 +6,7 @@ import com.shiqi.quickjs.QuickJS
 
 
 class JsHelper {
-    var quickJS: QuickJS = QuickJS.Builder().build()
+    private var quickJS: QuickJS = QuickJS.Builder().build()
     fun newJsEnv(): JSContext {
         val runtime = quickJS.createJSRuntime()
         return runtime.createJSContext()

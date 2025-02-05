@@ -17,10 +17,6 @@ class App  : Application() {
         jsHelper = JsHelper()
     }
 
-    override fun onTerminate() {
-        super.onTerminate()
-    }
-
     override fun attachBaseContext(base: Context?) {
         super.attachBaseContext(base)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
