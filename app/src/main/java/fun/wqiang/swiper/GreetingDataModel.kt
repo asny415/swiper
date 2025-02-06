@@ -10,4 +10,6 @@ class GreetingDataModel(val connected: Boolean,
                         val onDeletedItem: (item: JSONObject) -> Unit = {},
                         val onShowDialog: () -> Unit = {},
                         val onPair: (port: Int, pairCode: String) -> Unit = { _, _ -> },
-                        val setVolumn: (int: Int) -> Unit = {})
+                        val setVolumn: (int: Int) -> Unit = {},
+                        val readSettingSpeak: () -> Boolean = { false },
+                        val saveSettingSpeak: (b: Boolean) -> Unit = {})

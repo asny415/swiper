@@ -76,6 +76,7 @@ public class HelperService extends Service {
     private final MutableLiveData<CharSequence> currentPkg = new MutableLiveData<>();
     private NotificationManager notificationManager;
     private AbsAdbConnectionManager manager;
+    private PrefereManager pm = null;
     private final Runnable outputGenerator = () -> {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(adbShellStream.openInputStream()))) {
             StringBuilder sb = new StringBuilder();
@@ -152,6 +153,7 @@ public class HelperService extends Service {
         manager = AdbConnectionManager.getInstance(this);
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         jsHelper = ((App) getApplication()).getJsHelper();
+        pm = new PrefereManager(this);
         Log.d(TAG, "onCreate called");
         TTSHelper.initTTS(this, s -> {
             CompletableFuture<Void> future = utterances.get(s);
@@ -163,6 +165,9 @@ public class HelperService extends Service {
     }
 
     private CompletableFuture<Void> say(String text) {
+        //用户设置不要说话
+        if (!pm.readSettingSpeak()) return CompletableFuture.completedFuture(null);
+        Log.d(TAG, "say:" + text);
         String utteranceId = new Date().toString();
         utterances.put(utteranceId, new CompletableFuture<>());
         if (tts!=null) {

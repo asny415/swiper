@@ -26,6 +26,7 @@ import java.io.File
 class ActivityUtils(private val activity: MainActivity, private val viewModel: MainViewModel) {
     var tts: TextToSpeech? = null
     private  val tAG = "ActivityUtils"
+    private val pm = PrefereManager(activity)
     init {
         TTSHelper.initTTS(activity) {}.thenAccept {
             tts=it
@@ -136,14 +137,13 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
         onDeletedItem = { item ->
             unlinkFile(item.getString("filename"))
         },
-            setVolumn = {
-                audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, it, 0)
-                tts!!.speak("测试", TextToSpeech.QUEUE_FLUSH, null, null)
-                val sharedPreferences = activity.getSharedPreferences("Swiper", Context.MODE_PRIVATE)
-                val editor = sharedPreferences.edit()
-                editor.putInt("volumn", it)
-                editor.apply()
-            },
+        readSettingSpeak =  { pm.readSettingSpeak() },
+        saveSettingSpeak = {value: Boolean -> pm.saveSettingSpeak(value) },
+        setVolumn = {
+            audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, it, 0)
+            tts!!.speak("测试", TextToSpeech.QUEUE_FLUSH, null, null)
+            pm.saveVolumn(it)
+        },
         onClickItem = { item ->
             viewModel.disconnect()
             val intent = Intent(activity, HelperService::class.java)

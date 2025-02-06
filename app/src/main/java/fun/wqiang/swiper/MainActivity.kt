@@ -261,8 +261,9 @@ fun Setting(gvm: GreetingDataModel, modifier: Modifier = Modifier) {
         SettingCard(title = "通知设置") {
             SwitchSettingItem(
                 title = "通知声音",
-                description = "开启通知提示音",
-                checked = true
+                description = "开启通知提示语音",
+                checked = gvm.readSettingSpeak(),
+                onChange = {gvm.saveSettingSpeak(it)}
             )
         }
     }
@@ -272,7 +273,8 @@ fun Setting(gvm: GreetingDataModel, modifier: Modifier = Modifier) {
 fun SwitchSettingItem(
     title: String,
     description: String,
-    checked: Boolean
+    checked: Boolean,
+    onChange: (Boolean) -> Unit
 ) {
     var enabled by remember { mutableStateOf(checked) }
 
@@ -297,7 +299,10 @@ fun SwitchSettingItem(
         }
         Switch(
             checked = enabled,
-            onCheckedChange = { enabled = it }
+            onCheckedChange = {
+                enabled = it
+                onChange(it)
+            }
         )
     }
 }

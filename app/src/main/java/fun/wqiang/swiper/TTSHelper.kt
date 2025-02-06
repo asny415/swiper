@@ -15,9 +15,10 @@ class TTSHelper {
         @JvmStatic
     fun initTTS(context: Context, onTTSDone: (String) -> Unit): CompletableFuture<TextToSpeech> {
         val future: CompletableFuture<TextToSpeech> = CompletableFuture()
+        val pm = PrefereManager(context)
 
         var tts: TextToSpeech? = null
-       tts = TextToSpeech(context) { status: Int ->
+        tts = TextToSpeech(context) { status: Int ->
            if (status == TextToSpeech.SUCCESS) {
                // 设置语言（例如中文）
                val result: Int = tts!!.setLanguage(Locale.CHINESE)
@@ -48,9 +49,7 @@ class TTSHelper {
                        override fun onError(s: String) {
                        }
                    })
-                   val sharedPreferences =
-                       context.getSharedPreferences("MyPrefs", Context.MODE_PRIVATE)
-                   val vol = sharedPreferences.getInt("volumn", -1)
+                   val vol = pm.getVolumn()
                    if (vol != -1) {
                        audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, vol, 0)
                    }
