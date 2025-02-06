@@ -173,7 +173,7 @@ public class HelperService extends Service {
         String utteranceId = new Date().toString();
         utterances.put(utteranceId, new CompletableFuture<>());
         if (tts!=null) {
-            int ttsresult = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId);
+            int ttsresult = tts.speak(text, TextToSpeech.QUEUE_ADD, null, utteranceId);
             Log.d(TAG, "tts result:" + ttsresult+ " for text:" + text);
             if (ttsresult<0) {
                 return CompletableFuture.completedFuture(null);
@@ -184,6 +184,17 @@ public class HelperService extends Service {
 
     private void goEvent(Event event, JSONObject params) {
         Log.d("TEST", "goEvent: " + event.toString() + " " + params.toString());
+
+        if (pkgCheckTimer != null) {
+            // 有时候因为不预期的逻辑错误，可能导致状态机被多次启动，这种单例检查可以在多个点阻断状态机的多次启动，避免造成重复执行
+            pkgCheckTimer.cancel(true);
+            pkgCheckTimer = null;
+        }
+        if (screenCaptureTimer != null) {
+            screenCaptureTimer.cancel(true);
+            screenCaptureTimer = null;
+        }
+
         switch (event) {
             case Sleep:
                 goEvtSleep(params);
@@ -211,13 +222,7 @@ public class HelperService extends Service {
     }
 
     private void executePackageCheck() {
-        // 执行包名检查可能引起执行中断，所以要起一个定时器，如果定时器超时，只可能是ADB连接中断了，这时候应该提醒用户
-        if (pkgCheckTimer != null) {
-            // 有时候因为不预期的逻辑错误，可能导致状态机被多次启动，这种单例检查可以在多个点阻断状态机的多次启动，避免造成重复执行
-            pkgCheckTimer.cancel(true);
-        }
         pkgCheckTimer = scheduler.schedule(() -> {
-            pkgCheckTimer = null;
             say("包名检查超时").thenAccept(aVoid -> goEvent(Event.Start, new JSONObject()));
         },3, TimeUnit.SECONDS);
         execute("dumpsys window | grep -E 'mCurrentFocus' | sed 's/^/package:/'");
@@ -225,11 +230,6 @@ public class HelperService extends Service {
 
     private final Observer<CharSequence> packageCheckObserver = output -> {
         Log.d(TAG, "packageCheckObserver:" + output.toString());
-        if (pkgCheckTimer != null) {
-            //既然等到了包名，就不需要这个超时定时器了
-            pkgCheckTimer.cancel(true);
-            pkgCheckTimer = null;
-        }
         String pkg = output.toString();
         if (targetpkg.isEmpty() || pkg.equals(targetpkg)) {
             goEvent(Event.CaptureScreen, new JSONObject());
@@ -238,14 +238,7 @@ public class HelperService extends Service {
             goEvent(Event.WaitPackage, new JSONObject());
         }
     };
-    private final Observer<CharSequence> screenCaptureObserver = output ->{
-        if (screenCaptureTimer != null) {
-            //既然等到了结果，就不需要这个超时定时器了。
-            screenCaptureTimer.cancel(true);
-            screenCaptureTimer = null;
-        }
-        processScreenCapture(output.toString());
-    };
+    private final Observer<CharSequence> screenCaptureObserver = output -> processScreenCapture(output.toString());
     public static Bitmap decodeBase64ToBitmap(String base64String) {
         Log.d(TAG, "decodeBase64ToBitmap, base64String length: " + base64String.length());
         try {
@@ -401,14 +394,9 @@ public class HelperService extends Service {
     }
 
     private void executeScreenCapture() {
-        //需要启动一个定时器，避免一直得不到图像导致的超时
-        if (screenCaptureTimer != null) {
-            screenCaptureTimer.cancel(true);
-        }
         screenCaptureTimer = scheduler.schedule(() -> {
-            screenCaptureTimer = null;
             say("截图超时").thenAccept(aVoid -> goEvent(Event.Start, new JSONObject()));
-        },3, TimeUnit.SECONDS);
+        },10, TimeUnit.SECONDS);
         execute("echo \">>>\";screencap -p | base64; echo \"<<<\"");
     }
 

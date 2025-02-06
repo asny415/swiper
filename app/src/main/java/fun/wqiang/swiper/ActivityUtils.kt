@@ -141,7 +141,7 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
         saveSettingSpeak = {value: Boolean -> pm.saveSettingSpeak(value) },
         setVolumn = {
             audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, it, 0)
-            tts!!.speak("测试", TextToSpeech.QUEUE_FLUSH, null, null)
+            tts!!.speak("测试", TextToSpeech.QUEUE_ADD, null, null)
             pm.saveVolumn(it)
         },
         onClickItem = { item ->
