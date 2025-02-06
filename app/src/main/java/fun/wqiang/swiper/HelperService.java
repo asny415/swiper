@@ -161,6 +161,7 @@ public class HelperService extends Service {
             CompletableFuture<Void> future = utterances.get(s);
             if (future != null) {
                 future.complete(null);
+                utterances.remove(s);
             }
             return null;
         }).thenAccept(textToSpeech -> tts=textToSpeech);
