@@ -225,7 +225,7 @@ public class HelperService extends Service {
     private void executePackageCheck() {
         pkgCheckTimer = scheduler.schedule(() -> {
             say("包名检查超时").thenAccept(aVoid -> goEvent(Event.Start, new JSONObject()));
-        },3, TimeUnit.SECONDS);
+        },10, TimeUnit.SECONDS);
         execute("dumpsys window | grep -E 'mCurrentFocus' | sed 's/^/package:/'");
     }
 
