@@ -1,12 +1,16 @@
 package `fun`.wqiang.swiper
 
 import android.Manifest
+import android.Manifest.permission.WRITE_EXTERNAL_STORAGE
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.content.pm.PackageManager
+import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -95,6 +99,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     private var viewModel: MainViewModel? = null
     private var au: ActivityUtils? = null
+    private val requestManagerStorage = 100
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -111,12 +116,25 @@ class MainActivity : ComponentActivity() {
     private val requestNotificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { _: Boolean ->
         }
+    @Suppress("DEPRECATION")
     @SuppressLint("InlinedApi")
     fun requestPermissionLauncher() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED) {
+            != PERMISSION_GRANTED
+        ) {
             // 权限未授予，申请权限
             requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                startActivityForResult(intent, requestManagerStorage)
+            }
+        } else {
+            if (checkSelfPermission(WRITE_EXTERNAL_STORAGE) != PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(WRITE_EXTERNAL_STORAGE), requestManagerStorage)
+            }
         }
     }
 

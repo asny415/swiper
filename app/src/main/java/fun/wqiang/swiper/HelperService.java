@@ -2,6 +2,7 @@ package fun.wqiang.swiper;
 
 import static io.github.muntashirakon.adb.LocalServices.SHELL;
 
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -15,7 +16,6 @@ import android.graphics.Rect;
 import android.os.Build;
 import android.os.IBinder;
 import android.speech.tts.TextToSpeech;
-import android.util.Base64;
 import android.util.Log;
 import android.os.Handler;
 
@@ -25,6 +25,7 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -81,9 +82,7 @@ public class HelperService extends Service {
     private ScheduledFuture<?> pkgCheckTimer, screenCaptureTimer;
     private final Runnable outputGenerator = () -> {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(adbShellStream.openInputStream()))) {
-            StringBuilder sb = new StringBuilder();
             String s;
-            boolean inbase64 = false;
             while ((s = reader.readLine()) != null) {
                 if (s.length() != 76) {
                     Log.d(TAG, "outputGenerator: " + s);
@@ -98,14 +97,8 @@ public class HelperService extends Service {
                     Log.d(TAG, "find package name:" + packageName);
                     currentPkg.postValue(packageName);
                 }
-                if (Objects.equals(s, ">>>")) {
-                    inbase64 = true;
-                } else if (Objects.equals(s, "<<<")) {
-                    inbase64 = false;
-                    base64png.postValue(sb.toString());
-                    sb.setLength(0);
-                } else if (inbase64) {
-                    sb.append(s).append("\n");
+                if (s.startsWith("screen:")) {
+                    base64png.postValue(new Date().toString());
                 }
 
             }
@@ -240,14 +233,11 @@ public class HelperService extends Service {
         }
     };
     private final Observer<CharSequence> screenCaptureObserver = output -> processScreenCapture(output.toString());
+    @SuppressLint("SdCardPath")
     public static Bitmap decodeBase64ToBitmap(String base64String) {
         Log.d(TAG, "decodeBase64ToBitmap, base64String length: " + base64String.length());
         try {
-            // 1. Decode the Base64 string to a byte array
-            byte[] imageBytes = Base64.decode(base64String, Base64.DEFAULT);
-
-            // 2. Create a Bitmap from the byte array
-            return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+            return BitmapFactory.decodeFile("/sdcard/swiper_screen_cap.png");
         } catch (IllegalArgumentException e) {
             // Handle the case where the Base64 string is invalid
             System.err.println("Invalid Base64 string: " + e.getMessage());
@@ -394,11 +384,29 @@ public class HelperService extends Service {
         return null;
     }
 
+    public void deleteFileIfExists() {
+        // 构建文件路径
+        @SuppressLint("SdCardPath") String filePath = "/sdcard/swiper_screen_cap.png";
+        File file = new File(filePath);
+        // 检查文件是否存在并删除
+        if (file.exists()) {
+            if (file.delete()) {
+                Log.d(TAG,"文件删除成功");
+            } else {
+                Log.d(TAG,"文件删除失败");
+            }
+        } else {
+            Log.d(TAG,"文件不存在");
+        }
+    }
+
     private void executeScreenCapture() {
         screenCaptureTimer = scheduler.schedule(() -> {
             say("截图超时").thenAccept(aVoid -> goEvent(Event.Start, new JSONObject()));
         },10, TimeUnit.SECONDS);
-        execute("echo \">>>\";screencap -p | base64; echo \"<<<\"");
+        //如果 /sdcard/swiper_screen_cap.png 存在则删除
+        deleteFileIfExists();
+        execute("screencap -p /sdcard/swiper_screen_cap.png; echo \"screen:\"");
     }
 
     private void goEvtSleep(@Nullable JSONObject params) {
