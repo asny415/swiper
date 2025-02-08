@@ -46,6 +46,7 @@ import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import android.util.Base64
 import android.util.Log
+import androidx.activity.addCallback
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -109,6 +110,14 @@ class MainActivity : ComponentActivity() {
         au!!.handleReceivedFile(intent)
         setContent {
             val gvm =au!!.getGreetingDataModel()
+            onBackPressedDispatcher.addCallback {
+                Log.d(TAG, "back key pressed")
+                if (gvm.selectedPage.value != "Home") {
+                  gvm.selectedPage.value = "Home"
+                } else {
+                    finish()
+                }
+            }
             SwiperApp(gvm)
         }
     }
@@ -165,7 +174,7 @@ fun SwiperApp(gvm: GreetingDataModel) {
     val localContext = LocalContext.current
     val items = listOf("Home",  "Settings")
     val icons = listOf(Icons.Default.Home, Icons.Default.Settings)
-    val (selectedItem, setSelectedItem) = remember { mutableStateOf(items[0]) }
+    val (selectedItem, setSelectedItem) = gvm.selectedPage
     SwiperTheme  {
         Surface(modifier = Modifier.fillMaxSize(), color = colorScheme.background) {
             ModalNavigationDrawer(drawerState = drawerState,drawerContent = {
@@ -419,6 +428,7 @@ fun GreetingPreview() {
     SwiperApp(GreetingDataModel(connected = true, pairPort = "1234",
         currentVolumn = 10,
         maxVolumn = 100,
+        selectedPage = remember { mutableStateOf("Home") },
         scripts = List(1){listOf("""{
             |"name":"支付宝视频脚本",
             |"package": "test.test.test",

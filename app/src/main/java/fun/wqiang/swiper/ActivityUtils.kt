@@ -133,7 +133,7 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
         return GreetingDataModel(connected, pairPort,
         currentVolumn = volumn,
         maxVolumn = maxVolume,
-        scripts = scripts,
+        scripts = scripts, selectedPage = remember { mutableStateOf("Home") } ,
         onDeletedItem = { item ->
             unlinkFile(item.getString("filename"))
         },

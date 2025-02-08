@@ -1,10 +1,13 @@
 package `fun`.wqiang.swiper
 
+import androidx.compose.runtime.MutableState
 import org.json.JSONObject
 
 class GreetingDataModel(val connected: Boolean,
                         var pairPort: String,
-                        val maxVolumn:Int, val currentVolumn:Int,
+                        val selectedPage: MutableState<String>,
+                        val maxVolumn:Int,
+                        val currentVolumn:Int,
                         val scripts: List<JSONObject>,
                         val onClickItem: (item: JSONObject) -> Unit = {},
                         val onDeletedItem: (item: JSONObject) -> Unit = {},
