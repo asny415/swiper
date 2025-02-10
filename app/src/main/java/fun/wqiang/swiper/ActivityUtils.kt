@@ -36,7 +36,7 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
     fun handleReceivedFile(intent: Intent?) {
         if (!pm.readSettingAllowImport()) {
             Log.d(TAG, "handleReceivedFile: not allow import")
-            return;
+            return
         }
         when (intent?.action) {
             Intent.ACTION_VIEW -> handleSingleFile(intent.data)
@@ -65,7 +65,7 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
         if (script?.isNotEmpty() == true) {
             val jsHelper = JsHelper()
             val jsenv = jsHelper.newJsEnv(activity)
-           val filename = jsHelper.getName(jsenv,script)
+            val filename = jsHelper.getName(jsenv,script)
             jsenv.close()
             Log.d(TAG, "filename is:$filename")
             File(activity.filesDir, "scripts" + File.separator + filename+".mjs").writeText(script)

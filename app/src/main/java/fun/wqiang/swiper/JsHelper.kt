@@ -2,12 +2,11 @@ package `fun`.wqiang.swiper
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
+import android.speech.tts.TextToSpeech
 import android.util.Log
-import com.google.android.gms.tasks.Task
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
@@ -18,6 +17,7 @@ import com.shiqi.quickjs.JSNumber
 import com.shiqi.quickjs.JSString
 import com.shiqi.quickjs.JSValue
 import com.shiqi.quickjs.QuickJS
+import `fun`.wqiang.swiper.TTSHelper.Companion.initTTS
 import io.github.muntashirakon.adb.AdbPairingRequiredException
 import io.github.muntashirakon.adb.AdbStream
 import io.github.muntashirakon.adb.LocalServices.SHELL
@@ -26,6 +26,7 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
 import java.nio.charset.StandardCharsets
+import java.util.Date
 import java.util.Timer
 import java.util.TimerTask
 import java.util.concurrent.CompletableFuture
@@ -35,43 +36,106 @@ class JsHelper {
     private var seed: Int = 10000
     private var quickJS: QuickJS = QuickJS.Builder().build()
     val mainThreadHandler = Handler(Looper.getMainLooper())
-    fun newJsEnv(context: Context): JSContext {
+    fun newJsEnv(context: Context) : JSContext {
         val runtime = quickJS.createJSRuntime()
-        val ctx = runtime.createJSContext()
-        initGlobalValue(context, ctx)
-        return ctx
+        val jsenv = runtime.createJSContext()
+        globalGetApplicationIcon(context, jsenv)
+        globalGetScreenWidth(context,jsenv)
+        globalGetScreenHeight(context,jsenv)
+        return jsenv
     }
 
     private fun globalGetApplicationIcon(context: Context, jsenv: JSContext) {
         jsenv.globalObject.setProperty("getApplicationIcon", jsenv.createJSFunction{ctx, args ->
-            val pkg = args[0].cast(JSString::class.java).string;
+            val pkg = args[0].cast(JSString::class.java).string
             val b64 = CommonUtils.fetchPkgIconB64(context, pkg)
-            ctx.createJSString(b64);
+            ctx.createJSString(b64)
         })
     }
-    private fun initGlobalValue(
+    private fun globalSay(context: Context, jsenv: JSContext):CompletableFuture<Void> {
+        val future = CompletableFuture<Void>()
+        val utterances = HashMap<String, CompletableFuture<Void>>()
+        var tts:TextToSpeech? = null
+        val pm = PrefereManager(context)
+        jsenv.globalObject.setProperty(
+            "closeTTS", jsenv.createJSFunction{ _, _ ->
+                if (tts != null) {
+                    TTSHelper.closeTTS(context, tts!!)
+                }
+                null
+            }
+        )
+        fun say(text: String): CompletableFuture<Void>? {
+            //用户设置不要说话
+            if (!pm.readSettingSpeak()) {
+                Log.d(TAG, "say:$text disabled")
+                return CompletableFuture.completedFuture(null)
+            }
+            Log.d(TAG, "say:$text")
+            val utteranceId = Date().toString()
+            utterances[utteranceId] = CompletableFuture()
+            if (tts != null) {
+                val ttsresult = tts!!.speak(text, TextToSpeech.QUEUE_ADD, null, utteranceId)
+                Log.d(TAG, "tts result:$ttsresult for text:$text")
+                if (ttsresult < 0) {
+                    return CompletableFuture.completedFuture(null)
+                }
+            }
+            return utterances[utteranceId]
+        }
+
+        initTTS(context) { s: String? ->
+            val fu: CompletableFuture<Void>? = utterances[s]
+            if (fu != null) {
+                fu.complete(null)
+                utterances.remove(s)
+            }
+        }.thenAccept{textToSpeech->
+            tts = textToSpeech
+            jsenv.globalObject.setProperty(
+                "say",
+                jsenv.createJSFunction { jsContext: JSContext?, jsValues: Array<JSValue> ->
+                    val text = jsValues[0].cast(
+                        JSString::class.java
+                    ).string
+                    Log.d(TAG, "say js:$text")
+                    jsContext!!.createJSPromise { resolve: JSFunction, _: JSFunction? ->
+                        val args = arrayOfNulls<JSValue>(0)
+                        say(text)?.thenAccept {
+                            resolve.invoke(
+                                jsenv.createJSNull(),
+                                args
+                            )
+                        }
+                    }
+                })
+            future.complete(null)
+        }
+        return future
+    }
+    fun initGlobals(
         context: Context,
         jsenv: JSContext
-    ) {
-        globalGetApplicationIcon(context, jsenv)
-        globalGetScreenWidth(context,jsenv)
-        globalGetScreenHeight(context,jsenv)
-        globalDelay(context, jsenv)
-        globalSetTimeout(context, jsenv)
-        globalLog(context, jsenv)
-        globalAdb(context, jsenv)
-        globalLaunchPackage(context, jsenv)
-        globalCheckRunning(context, jsenv)
-        globalSwipeUp(context, jsenv)
-        globalScreenOCR(context, jsenv)
-        startPendingProcess(context,jsenv)
+    ) :CompletableFuture<Void> {
+        return globalSay(context, jsenv).thenApply {
+            globalDelay(jsenv)
+            globalSetTimeout(context, jsenv)
+            globalLog(jsenv)
+            globalAdb(context, jsenv)
+            globalLaunchPackage(jsenv)
+            globalCheckRunning(jsenv)
+            globalSwipeUp(jsenv)
+            globalScreenOCR(jsenv)
+            startPendingProcess(jsenv)
+            null
+        }
     }
 
     @SuppressLint("SdCardPath")
-    private fun globalScreenOCR(context: Context, jsenv: JSContext) {
-        jsenv.globalObject.setProperty("ocr", jsenv.createJSFunction { ctx, _ ->
-            jsenv.createJSPromise { resolve, reject ->
-                var bitmap = BitmapFactory.decodeFile("/sdcard/swiper_screen_cap.png")
+    private fun globalScreenOCR(jsenv: JSContext) {
+        jsenv.globalObject.setProperty("ocr", jsenv.createJSFunction { _, _ ->
+            jsenv.createJSPromise { resolve, _ ->
+                val bitmap = BitmapFactory.decodeFile("/sdcard/swiper_screen_cap.png")
                 val result = JSONObject()
                 if (bitmap != null) {
                     val textRecognizer =
@@ -141,7 +205,7 @@ class JsHelper {
             |}""".trimMargin(), "ocr.js")
     }
 
-    private fun globalSwipeUp(context: Context, jsenv: JSContext) {
+    private fun globalSwipeUp(jsenv: JSContext) {
         val cmd = "`input swipe \${x1} \${y1} \${x2} \${y2} \${duration} && echo \"\"`"
         jsenv.evaluate("""
             async function swipeUp(options={}) {
@@ -159,26 +223,26 @@ class JsHelper {
         """, "plugin.js")
     }
 
-    private fun globalCheckRunning(context: Context, jsenv: JSContext) {
-        jsenv.evaluate("async function checkRunning(pkg) {const rsp = await adb(`dumpsys window | grep -E 'mCurrentFocus'`); return rsp.trim().split(` `)[2].split(`}`)[0].split(`/`) }", "plugin.js")
+    private fun globalCheckRunning(jsenv: JSContext) {
+        jsenv.evaluate("async function checkRunning() {const rsp = await adb(`dumpsys window | grep -E 'mCurrentFocus'`); return rsp.trim().split(` `)[2].split(`}`)[0].split(`/`) }", "plugin.js")
     }
 
-    private fun startPendingProcess(context: Context, jsenv: JSContext) {
+    private fun startPendingProcess(jsenv: JSContext) {
         val pendingTimer = Timer()
         pendingTimer.schedule(object : TimerTask() {
             override fun run() {
-                mainThreadHandler.post({
+                mainThreadHandler.post {
                     try {
                         jsenv.executePendingJob()
-                    }catch (e:Exception) {
+                    } catch (e: Exception) {
                         pendingTimer.cancel()
                     }
-                })
+                }
             }
         }, 0L, 1000)
     }
 
-    private fun globalLaunchPackage(context: Context, jsenv: JSContext) {
+    private fun globalLaunchPackage(jsenv: JSContext) {
         jsenv.evaluate("function launchPackage(pkg) {return adb(`monkey -p \${pkg} -c android.intent.category.LAUNCHER 1`)}", "other.js")
     }
 
@@ -186,9 +250,9 @@ class JsHelper {
         val manager = AdbConnectionManager.getInstance(context.applicationContext)
         val executor = Executors.newFixedThreadPool(3)
         var shellStream: AdbStream? = null
-        val promiseMap:MutableMap<String, List<JSFunction>> = mutableMapOf();
+        val promiseMap:MutableMap<String, List<JSFunction>> = mutableMapOf()
         jsenv.globalObject.setProperty("adb", jsenv.createJSFunction { ctx, args ->
-            val cmd = args[0].cast(JSString::class.java).string;
+            val cmd = args[0].cast(JSString::class.java).string
             val thisSeed = seed++
             jsenv.createJSPromise{ resolve, reject ->
                 promiseMap["cmd_$thisSeed"] = listOf(resolve,reject)
@@ -205,14 +269,16 @@ class JsHelper {
                                         Log.d(TAG, "adb shell output: $line")
                                         if (line.startsWith("cmd_")) {
                                             val result = line.split(":", limit = 2)
-                                            mainThreadHandler.post({
+                                            mainThreadHandler.post {
                                                 if (result[0] in promiseMap) {
-                                                    promiseMap[result[0]]!![0].invoke(jsenv.createJSNull(), Array<JSValue>(1) {
-                                                        ctx.createJSString(result[1])
-                                                    })
+                                                    promiseMap[result[0]]!![0].invoke(
+                                                        jsenv.createJSNull(),
+                                                        Array<JSValue>(1) {
+                                                            ctx.createJSString(result[1])
+                                                        })
                                                     promiseMap.remove(result[0])
                                                 }
-                                            })
+                                            }
                                         }
                                         line = reader.readLine()
                                     }
@@ -259,9 +325,9 @@ class JsHelper {
         })
     }
 
-    private fun globalLog(context: Context, jsenv: JSContext) {
+    private fun globalLog(jsenv: JSContext) {
         jsenv.globalObject.setProperty("log", jsenv.createJSFunction{ ctx, args ->
-            val log = args[0].cast(JSString::class.java).string;
+            val log = args[0].cast(JSString::class.java).string
             Log.d(TAG, "Log from JS: $log")
             ctx.createJSNull()
         })
@@ -270,13 +336,13 @@ class JsHelper {
 
     private fun globalSetTimeout(context: Context, jsenv: JSContext) {
         jsenv.globalObject.setProperty("setTimeout", jsenv.createJSFunction{ ctx, args ->
-            val cb = args[0].cast(JSFunction::class.java);
-            val ms = args[1].cast(JSNumber::class.java).long;
+            val cb = args[0].cast(JSFunction::class.java)
+            val ms = args[1].cast(JSNumber::class.java).double.toLong()
             val t = Timer()
             t.schedule(object: TimerTask() {
                 override fun run() {
                     mainThreadHandler.post {
-                        cb.invoke(jsenv.createJSNull(), Array<JSValue>(0, { ctx.createJSNull() }))
+                        cb.invoke(jsenv.createJSNull(), Array<JSValue>(0) { ctx.createJSNull() })
                     }
                 }
             }, ms)
@@ -284,7 +350,7 @@ class JsHelper {
         })
     }
 
-    private fun globalDelay(context: Context, jsenv: JSContext) {
+    private fun globalDelay(jsenv: JSContext) {
         jsenv.evaluate("const delay=(ms)=>new Promise(r=>setTimeout(r, ms));","delay.js")
     }
 
