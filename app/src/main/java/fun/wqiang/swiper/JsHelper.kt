@@ -3,6 +3,7 @@ package `fun`.wqiang.swiper
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import com.shiqi.quickjs.JSContext
 import com.shiqi.quickjs.JSFunction

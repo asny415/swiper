@@ -54,9 +54,12 @@ import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions;
 import com.shiqi.quickjs.JSContext;
 import com.shiqi.quickjs.JSException;
+import com.shiqi.quickjs.JSFunction;
 import com.shiqi.quickjs.JSFunctionCallback;
+import com.shiqi.quickjs.JSString;
 import com.shiqi.quickjs.JSUndefined;
 import com.shiqi.quickjs.JSValue;
+import com.shiqi.quickjs.PromiseExecutor;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -515,6 +518,14 @@ public class HelperService extends Service {
             mainFuture = new CompletableFuture<>();
             jsenv = jsHelper.newJsEnv(this);
             tts=textToSpeech;
+            jsenv.getGlobalObject().setProperty("say", jsenv.createJSFunction((jsContext, jsValues) -> {
+                String text = jsValues[0].cast(JSString.class).getString();
+                Log.d(TAG, "say js:" + text);
+                return jsenv.createJSPromise((resolve, reject) -> {
+                    JSValue[] args = new JSValue[0];
+                    say(text).thenAccept((aVoid)->{resolve.invoke(jsenv.createJSNull(), args);});
+                });
+            }));
             jsenv.getGlobalObject().setProperty("finish", jsenv.createJSFunction((jsContext, jsValues) -> {
                 if (jsValues[0] instanceof JSUndefined) {
                     mainFuture.complete("");
