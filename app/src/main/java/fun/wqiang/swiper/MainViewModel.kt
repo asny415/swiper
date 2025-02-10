@@ -1,28 +1,22 @@
 package `fun`.wqiang.swiper
 
-import android.app.Application
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
-import io.github.muntashirakon.adb.AdbPairingRequiredException
 import io.github.muntashirakon.adb.android.AdbMdns
 import io.github.muntashirakon.adb.android.AndroidUtils
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.InetAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import android.graphics.drawable.Drawable
 import java.io.File
 import java.io.FileOutputStream
 
@@ -212,48 +206,10 @@ class MainViewModel(val app: App) : AndroidViewModel(app) {
                     )
                 } else pairingStatus = false
                 paired.postValue(pairingStatus)
-                autoConnectInternal()
             } catch (th: Throwable) {
                 th.printStackTrace()
                 paired.postValue(false)
             }
-        }
-    }
-
-    private fun autoConnectInternal(){
-        var conn = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            try {
-                conn = manager.autoConnect(getApplication(), 5000)
-            } catch (e: AdbPairingRequiredException) {
-                needPair.postValue(true)
-                return
-            } catch (th: Throwable) {
-                th.printStackTrace()
-            }
-        }
-        try {
-            if (!conn) {
-                conn = manager.connect(5555)
-            }
-        } catch (th:Throwable) {
-            th.printStackTrace()
-        }
-        if (conn) {
-            connected.postValue(true)
-        }
-    }
-
-    fun autoConnect() {
-        executor.submit {
-            autoConnectInternal()
-        }
-    }
-
-    fun startPackage(context: Context, pkg: String) {
-        val launchIntent = context.packageManager.getLaunchIntentForPackage(pkg)
-        if (launchIntent != null) {
-            context.startActivity(launchIntent)
         }
     }
 

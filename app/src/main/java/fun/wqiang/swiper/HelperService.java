@@ -116,6 +116,7 @@ public class HelperService extends Service {
     private int unknown = 0;
     private JSContext jsenv;
     private final HashMap<String, CompletableFuture<Void>> utterances = new HashMap<>();
+    private CompletableFuture<String> mainFuture = null;
 
     public void execute(String command) {
         Log.d("ADB", "execute command: " + command);
@@ -149,15 +150,19 @@ public class HelperService extends Service {
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         jsHelper = ((App) getApplication()).getJsHelper();
         pm = new PrefereManager(this);
-        Log.d(TAG, "onCreate called");
-        TTSHelper.initTTS(this, s -> {
-            CompletableFuture<Void> future = utterances.get(s);
-            if (future != null) {
-                future.complete(null);
-                utterances.remove(s);
+        new Thread(() -> {
+            try {
+                manager.autoConnect(HelperService.this,1000);
+            } catch (Exception e) {
+                Log.e(TAG, "Error auto connecting to ADB",e);
+                try {
+                    manager.connect(5555);
+                } catch (Exception ex) {
+                    Log.e(TAG, "Error connecting to 5555",ex);
+                }
             }
-            return null;
-        }).thenAccept(textToSpeech -> tts=textToSpeech);
+        }).start();
+        Log.d(TAG, "onCreate called");
     }
 
     private CompletableFuture<Void> say(String text) {
@@ -378,7 +383,6 @@ public class HelperService extends Service {
             case "say":
                 return say(reason);
             case "finish":
-                safeQuit(true);
                 return CompletableFuture.completedFuture(null);
         }
         return null;
@@ -424,18 +428,6 @@ public class HelperService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        Log.d(TAG, "onDestroy called");
-        base64png.removeObserver(screenCaptureObserver);
-        currentPkg.removeObserver(packageCheckObserver);
-        Log.d(TAG, "unobserve base64 and packname");
-        clearAllNotifications();
-        if (tts != null) {
-            tts.stop();
-            tts.shutdown();
-        }
-        if (jsenv != null) {
-            jsenv.close();
-        }
         try {
             manager.disconnect();
         } catch (IOException e) {
@@ -497,7 +489,10 @@ public class HelperService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand called");
         if (Objects.equals(intent.getAction(), ACTION_STOP)) {
-            safeQuit(false);
+            if (mainFuture!=null) {
+                mainFuture.complete("用户中止");
+                mainFuture = null;
+            }
             return START_NOT_STICKY;
         }
         createNotification();
@@ -506,23 +501,26 @@ public class HelperService extends Service {
             jsenv.close();
         }
         jsenv = jsHelper.newJsEnv(this);
-        jsenv.evaluate(script + "\n module.go()", "main.js");
+
+        TTSHelper.initTTS(this, s -> {
+            CompletableFuture<Void> future = utterances.get(s);
+            if (future != null) {
+                future.complete(null);
+                utterances.remove(s);
+            }
+            return null;
+        }).thenAccept((textToSpeech) -> {
+            tts=textToSpeech;
+            mainFuture = new CompletableFuture<>();
+            jsenv.evaluate(script + "\n module.go()", "main.js");
+            mainFuture.thenAccept(reason->{
+               Log.d(TAG, "运行终止: " + reason);
+                clearAllNotifications();
+                TTSHelper.closeTTS(this, tts);
+                jsenv.close();
+            });
+        });
         return START_NOT_STICKY;
-    }
-
-    private void safeQuit(boolean succ) {
-        if (succ && !script.isEmpty()) {
-            say("任务完成").thenAccept(aVoid -> stopSelf());
-        } else if (!script.isEmpty()){
-            say("任务中止").thenAccept(aVoid -> stopSelf());
-        }
-        script = "";
-    }
-
-    private void initRuntime() {
-        ctx=new JSONObject();
-        targetpkg =  jsHelper.executeJavaScript(jsenv,script + "\n" + "pkg");
-        Log.d("TEST", "GOT PACKAGE on service: " + targetpkg);
     }
 
     private CompletableFuture<JSONObject> img2text(Bitmap bitmap) {

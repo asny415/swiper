@@ -160,12 +160,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel!!.refreshAllScripts()
-        if (viewModel!!.connected.value == false || viewModel!!.connected.value == null) {
-            Log.d("MainActivity", "onResume: ${viewModel!!.connected.value}")
-            viewModel!!.autoConnect()
-        } else {
-            Log.d("MainActivity", "onResume: ${viewModel!!.connected.value}")
-        }
         val intent = Intent(this, HelperService::class.java)
         intent.setAction(HelperService.ACTION_STOP)
         startService(intent)

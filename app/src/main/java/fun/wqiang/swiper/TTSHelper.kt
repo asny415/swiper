@@ -62,5 +62,13 @@ class TTSHelper {
             return future
     }
 
+        @JvmStatic
+        fun closeTTS(context: Context, tts: TextToSpeech) {
+            val audioManager =
+                context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            audioManager.mode = AudioManager.MODE_NORMAL
+            tts.stop()
+            tts.shutdown()
+        }
     }
 }

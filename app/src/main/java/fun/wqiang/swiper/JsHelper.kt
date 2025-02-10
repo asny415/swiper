@@ -107,7 +107,7 @@ class JsHelper {
                 try {
                     if (shellStream == null || shellStream!!.isClosed) {
                         shellStream = manager.openStream(SHELL)
-                        Thread({
+                        Thread {
                             try {
                                 val reader = shellStream!!.openInputStream().bufferedReader()
                                 var line: String? = reader.readLine()
@@ -116,7 +116,10 @@ class JsHelper {
                                     if (line.startsWith("cmd_")) {
                                         val result = line.split(":", limit = 2)
                                         mainThreadHandler.post({
-                                            jsenv.evaluate("log('${result[0]} -> ${result[1]}'); if (adbPromise['${result[0]}']) {adbPromise['${result[0]}'].resolve('${result[1]}'); delete adbPromise['${result[0]}'];}", "adb.js")
+                                            jsenv.evaluate(
+                                                "log('${result[0]} -> ${result[1]}'); if (adbPromise['${result[0]}']) {adbPromise['${result[0]}'].resolve('${result[1]}'); delete adbPromise['${result[0]}'];}",
+                                                "adb.js"
+                                            )
                                         })
                                     }
                                     line = reader.readLine()
@@ -124,7 +127,7 @@ class JsHelper {
                             } catch (e: Exception) {
                                 Log.e(TAG, "Error reading output", e)
                             }
-                        }).start()
+                        }.start()
                     }
                 } catch (e:Exception) {
                     Log.e("ADB", "Error executing command", e)

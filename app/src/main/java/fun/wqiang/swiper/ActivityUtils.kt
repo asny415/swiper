@@ -127,7 +127,7 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
 
     @Composable
     fun getGreetingDataModel(): GreetingDataModel {
-        var connected by remember { mutableStateOf(false) }
+        var connected by remember { mutableStateOf(true) }
         var running by remember { mutableStateOf(false) }
         var pairPort by remember { mutableStateOf("") }
         var scripts by remember { mutableStateOf(listOf<JSONObject>()) }
