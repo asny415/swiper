@@ -53,6 +53,10 @@ import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions;
 import com.shiqi.quickjs.JSContext;
+import com.shiqi.quickjs.JSException;
+import com.shiqi.quickjs.JSFunctionCallback;
+import com.shiqi.quickjs.JSUndefined;
+import com.shiqi.quickjs.JSValue;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -500,8 +504,6 @@ public class HelperService extends Service {
         if (jsenv != null) {
             jsenv.close();
         }
-        jsenv = jsHelper.newJsEnv(this);
-
         TTSHelper.initTTS(this, s -> {
             CompletableFuture<Void> future = utterances.get(s);
             if (future != null) {
@@ -510,9 +512,18 @@ public class HelperService extends Service {
             }
             return null;
         }).thenAccept((textToSpeech) -> {
-            tts=textToSpeech;
             mainFuture = new CompletableFuture<>();
-            jsenv.evaluate(script + "\n module.go()", "main.js");
+            jsenv = jsHelper.newJsEnv(this);
+            tts=textToSpeech;
+            jsenv.getGlobalObject().setProperty("finish", jsenv.createJSFunction((jsContext, jsValues) -> {
+                if (jsValues[0] instanceof JSUndefined) {
+                    mainFuture.complete("");
+                } else {
+                    mainFuture.complete(jsValues[0].toString());
+                }
+                return null;
+            }));
+            jsenv.evaluate(script + "\n module.go().catch(finish).then(()=>launchPackage('fun.wqiang.swiper'))", "main.js");
             mainFuture.thenAccept(reason->{
                Log.d(TAG, "运行终止: " + reason);
                 clearAllNotifications();
