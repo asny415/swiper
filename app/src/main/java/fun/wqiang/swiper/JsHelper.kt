@@ -1,10 +1,17 @@
 package `fun`.wqiang.swiper
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
-import android.speech.tts.TextToSpeech
 import android.util.Log
+import com.google.android.gms.tasks.Task
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import com.shiqi.quickjs.JSContext
 import com.shiqi.quickjs.JSFunction
 import com.shiqi.quickjs.JSNumber
@@ -14,9 +21,14 @@ import com.shiqi.quickjs.QuickJS
 import io.github.muntashirakon.adb.AdbPairingRequiredException
 import io.github.muntashirakon.adb.AdbStream
 import io.github.muntashirakon.adb.LocalServices.SHELL
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
+import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.Timer
 import java.util.TimerTask
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 
 class JsHelper {
@@ -55,8 +67,78 @@ class JsHelper {
         startPendingProcess(context,jsenv)
     }
 
+    @SuppressLint("SdCardPath")
     private fun globalScreenOCR(context: Context, jsenv: JSContext) {
-        //TODO
+        jsenv.globalObject.setProperty("ocr", jsenv.createJSFunction { ctx, _ ->
+            jsenv.createJSPromise { resolve, reject ->
+                var bitmap = BitmapFactory.decodeFile("/sdcard/swiper_screen_cap.png")
+                val result = JSONObject()
+                if (bitmap != null) {
+                    val textRecognizer =
+                        TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+                    val image = InputImage.fromBitmap(bitmap, 0)
+                    textRecognizer.process(image).addOnSuccessListener { text: Text ->
+                        try {
+                            result.put("width", image.width)
+                            result.put("height", image.height)
+                            val results = JSONArray()
+                            result.put("result", "succ")
+                            result.put("nodes", results)
+                            val textBlocks = text.textBlocks
+                            for (block in textBlocks) {
+                                // 获取文本块中的每一行
+                                val lines = block.lines
+                                for (line in lines) {
+                                    // 获取每一行的元素（单个字符）
+                                    val elements = line.elements
+                                    for (element in elements) {
+                                        // 获取每个字符的边界框
+                                        val elementBoundingBox = element.boundingBox
+                                        if (elementBoundingBox != null) {
+                                            val node = JSONObject()
+                                            node.put("text", element.text)
+                                            val bbox = JSONObject()
+                                            bbox.put("x", elementBoundingBox.left)
+                                            bbox.put("y", elementBoundingBox.top)
+                                            bbox.put("width", elementBoundingBox.width())
+                                            bbox.put("height", elementBoundingBox.height())
+                                            node.put("boundingBox", bbox)
+                                            results.put(node)
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e: JSONException) {
+                            throw RuntimeException(e)
+                        }
+                    }.addOnFailureListener { e: Exception ->
+                            // 处理错误
+                            Log.e("TEST", "识别失败", e)
+                        }.addOnCompleteListener {
+                        Log.e("TEST", "识别结束")
+                            bitmap.recycle()
+                            textRecognizer.close()
+                        File("/sdcard/swiper_screen_cap.png").delete()
+                            resolve.invoke(
+                                jsenv.createJSNull(),
+                                Array<JSValue>(1) { jsenv.createJSString(result.toString()) })
+                        }
+                } else {
+                    try {
+                        result.put("result", "无法加载图像")
+                        resolve.invoke(
+                            jsenv.createJSNull(),
+                            Array<JSValue>(1) { jsenv.createJSObject(result) })
+                    } catch (e: JSONException) {
+                        Log.e(TAG, "无法加载图像", e)
+                    }
+                }
+            }
+        })
+        jsenv.evaluate("""async function screenOCR(){
+            |await adb("screencap -p /sdcard/swiper_screen_cap.png && echo \"\"")
+            |return await ocr()
+            |}""".trimMargin(), "ocr.js")
     }
 
     private fun globalSwipeUp(context: Context, jsenv: JSContext) {
