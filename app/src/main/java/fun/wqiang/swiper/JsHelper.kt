@@ -58,11 +58,11 @@ class JsHelper {
         var tts:TextToSpeech? = null
         val pm = PrefereManager(context)
         jsenv.globalObject.setProperty(
-            "closeTTS", jsenv.createJSFunction{ _, _ ->
+            "closeTTS", jsenv.createJSFunction{ ctx, _ ->
                 if (tts != null) {
                     TTSHelper.closeTTS(context, tts!!)
                 }
-                null
+                ctx.createJSNull()
             }
         )
         fun say(text: String): CompletableFuture<Void>? {
@@ -92,6 +92,7 @@ class JsHelper {
             }
         }.thenAccept{textToSpeech->
             tts = textToSpeech
+            Log.d(TAG, "initTTS done")
             jsenv.globalObject.setProperty(
                 "say",
                 jsenv.createJSFunction { jsContext: JSContext?, jsValues: Array<JSValue> ->

@@ -70,6 +70,9 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
             Log.d(TAG, "filename is:$filename")
             File(activity.filesDir, "scripts" + File.separator + filename+".mjs").writeText(script)
             viewModel.refreshAllScripts()
+            if (intent.getStringExtra("run") == "1") {
+                runScript(script)
+            }
             return
         }
         (intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))?.let { uri ->
@@ -163,18 +166,22 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
         },
         onClickItem = { item ->
             viewModel.disconnect()
-            val intent = Intent(activity, HelperService::class.java)
-            intent.putExtra("script", item.getString("code"))
-            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
-                activity.startForegroundService(intent)
-            } else {
-               activity.startService(intent)
-            }
+            runScript(item.getString("code"))
         },
         onShowDialog = {
             viewModel.getPairingPort()
         }, onPair = { port, pairCode ->
             viewModel.pair(port, pairCode)
         })
+    }
+
+    private fun runScript(code: String) {
+        val intent = Intent(activity, HelperService::class.java)
+        intent.putExtra("script", code)
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
+            activity.startForegroundService(intent)
+        } else {
+            activity.startService(intent)
+        }
     }
 }

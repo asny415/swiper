@@ -83,16 +83,21 @@ public class HelperService extends Service {
         jsHelper.initGlobals(this, jsenv).thenAccept((a) -> {
             mainFuture = new CompletableFuture<>();
             jsenv.getGlobalObject().setProperty("finish", jsenv.createJSFunction((jsContext, jsValues) -> {
-                if (jsValues[0] instanceof JSUndefined) {
+                if (jsValues[0] instanceof JSUndefined || jsValues[0] == null) {
                     mainFuture.complete("");
                 } else {
                     mainFuture.complete(jsValues[0].toString());
                 }
                 return null;
             }));
-            jsenv.evaluate(script + "\n module.go().catch(finish).then(closeTTS).then(()=>launchPackage('fun.wqiang.swiper'))", "main.js");
+            jsenv.evaluate(script + "\n module.go().catch(finish).then(()=>launchPackage('fun.wqiang.swiper'))", "main.js");
             mainFuture.thenAccept(reason->{
                 Log.d(TAG, "运行终止: " + reason);
+                try {
+                    jsenv.evaluate("closeTTS()", "cleanup.js");
+                } catch (Exception err) {
+                    Log.e(TAG, "close TTS error", err);
+                }
                 jsenv.close();
             });
         });
