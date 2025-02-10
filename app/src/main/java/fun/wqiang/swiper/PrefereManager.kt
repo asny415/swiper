@@ -22,6 +22,18 @@ class PrefereManager(val context: Context) {
         editor.apply()
     }
 
+    fun readSettingAllowImport(): Boolean {
+        val sharedPreferences = context.getSharedPreferences("Swiper", Context.MODE_PRIVATE)
+        return sharedPreferences.getBoolean("allowImport", false)
+    }
+
+    fun saveSettingAllowImport(value: Boolean) {
+        val sharedPreferences = context.getSharedPreferences("Swiper", Context.MODE_PRIVATE)
+        val editor = sharedPreferences.edit()
+        editor.putBoolean("allowImport", value)
+        editor.apply()
+    }
+
     fun getVolumn(): Int {
         val sharedPreferences = context.getSharedPreferences("Swiper", Context.MODE_PRIVATE)
         return sharedPreferences.getInt("volumn", -1)

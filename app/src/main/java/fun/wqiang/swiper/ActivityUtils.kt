@@ -34,6 +34,10 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
     }
 
     fun handleReceivedFile(intent: Intent?) {
+        if (!pm.readSettingAllowImport()) {
+            Log.d(TAG, "handleReceivedFile: not allow import")
+            return;
+        }
         when (intent?.action) {
             Intent.ACTION_VIEW -> handleSingleFile(intent.data)
             Intent.ACTION_SEND -> handleSharedFile(intent)
@@ -57,6 +61,17 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
 
     // 处理分享文件（ACTION_SEND）
     private fun handleSharedFile(intent: Intent) {
+        val script = intent.getStringExtra("script")
+        if (script?.isNotEmpty() == true) {
+            val jsHelper = JsHelper()
+            val jsenv = jsHelper.newJsEnv(activity)
+           val filename = jsHelper.getName(jsenv,script)
+            jsenv.close()
+            Log.d(TAG, "filename is:$filename")
+            File(activity.filesDir, "scripts" + File.separator + filename+".mjs").writeText(script)
+            viewModel.refreshAllScripts()
+            return
+        }
         (intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))?.let { uri ->
             handleSingleFile(uri)
         }
@@ -139,6 +154,8 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
         },
         readSettingSpeak =  { pm.readSettingSpeak() },
         saveSettingSpeak = {value: Boolean -> pm.saveSettingSpeak(value) },
+        readSettingAllowImport = { pm.readSettingAllowImport() },
+            saveSettingAllowImport = {value: Boolean -> pm.saveSettingAllowImport(value) },
         setVolumn = {
             audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, it, 0)
             tts!!.speak("测试", TextToSpeech.QUEUE_ADD, null, null)
@@ -153,7 +170,6 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
             } else {
                activity.startService(intent)
             }
-            viewModel.startPackage(activity, item.getString("pkg"))
         },
         onShowDialog = {
             viewModel.getPairingPort()

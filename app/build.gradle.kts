@@ -12,8 +12,8 @@ android {
         applicationId = "fun.wqiang.swiper"
         minSdk = 25
         35.also { targetSdk = it }
-        versionCode = 4
-        versionName = "2.1"
+        versionCode = 5
+        versionName = "3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

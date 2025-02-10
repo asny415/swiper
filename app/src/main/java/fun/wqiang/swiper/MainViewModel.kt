@@ -22,13 +22,11 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
-import android.util.Base64
 import java.io.File
 import java.io.FileOutputStream
 
-class MainViewModel(val app: Application) : AndroidViewModel(app) {
+class MainViewModel(val app: App) : AndroidViewModel(app) {
     private val executor = Executors.newFixedThreadPool(3)
     val running = MutableLiveData<Boolean>()
     val connected = MutableLiveData<Boolean>()
@@ -37,6 +35,7 @@ class MainViewModel(val app: Application) : AndroidViewModel(app) {
     private val pairPort = MutableLiveData<Int>()
     private val scripts = MutableLiveData<List<JSONObject>>()
     private val manager:AbsAdbConnectionManager = AdbConnectionManager(getApplication())
+    private val defaultIcon = CommonUtils.fetchPkgIconB64(app,"fun.wqiang.swiper")
 
     init {
         Handler(Looper.getMainLooper()).postDelayed({
@@ -46,25 +45,28 @@ class MainViewModel(val app: Application) : AndroidViewModel(app) {
 
     fun refreshAllScripts() {
         ensureScriptsDirectory(app)
-        val common = readCommonScript(app)
         val mjsScripts = readAllScripts(app)
         val scriptsList = mutableListOf<JSONObject>()
-        for ((fileName, content) in mjsScripts) {
-            val jsenv = (app as App).jsHelper!!.newJsEnv()
-            val code =common.replace("export ","") + content.replace("export ","").replace(Regex("^import.*\\n"), "")
-
-            val txt = app.jsHelper!!.executeJavaScript(jsenv,"$code\n JSON.stringify({name, description, pkg, icon:''})")
-            Log.d("*** 脚本执行结果 ***", "$fileName:$txt")
-            val obj = JSONObject(txt)
-            obj.put("code", code)
-            obj.put("filename", fileName)
-            val pkg = obj.getString("pkg")
-            val icon= getApplicationIcon(app, pkg)
-            if (icon != null) {
-                obj.put("icon", drawableToBase64(icon))
+        for ((fileName, code) in mjsScripts) {
+            val jsenv = app.jsHelper!!.newJsEnv(app)
+            try {
+                val obj = JSONObject(
+                    app.jsHelper!!.executeJavaScript(
+                        jsenv,
+                        "$code\n JSON.stringify(Object.assign({name:'', icon:'', description:'no description'},module))"
+                    )
+                )
+                obj.put("code", code)
+                obj.put("filename", fileName)
+                if (obj.getString("icon") == "") {
+                    obj.put("icon", defaultIcon)
+                }
                 scriptsList.add(obj)
+            }catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                jsenv.close()
             }
-            jsenv.close()
         }
         scripts.postValue(scriptsList)    }
 
@@ -76,49 +78,6 @@ class MainViewModel(val app: Application) : AndroidViewModel(app) {
             result += readTextFile(context,filePath)+"\n"
         }
         return result
-    }
-
-    private fun drawableToBitmap(drawable: Drawable): Bitmap {
-        // Check if the drawable has valid dimensions
-        if (drawable.intrinsicWidth <= 0 || drawable.intrinsicHeight <= 0) {
-            // Create a single-color bitmap of 1x1 pixel if dimensions are invalid
-            return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-        }
-
-        // Create a new bitmap with the same dimensions as the drawable
-        val bitmap = Bitmap.createBitmap(
-            drawable.intrinsicWidth,
-            drawable.intrinsicHeight,
-            Bitmap.Config.ARGB_8888
-        )
-
-        // Create a canvas to draw on the bitmap
-        val canvas = android.graphics.Canvas(bitmap)
-
-        // Set the bounds of the drawable to match the canvas
-        drawable.setBounds(0, 0, canvas.width, canvas.height)
-
-        // Draw the drawable onto the canvas
-        drawable.draw(canvas)
-
-        return bitmap
-    }
-    private fun drawableToBase64(drawable: Drawable): String? {
-        val bitmap = drawableToBitmap(drawable)
-        val byteArrayOutputStream =
-            ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream) // You can change the format and quality here
-        val byteArray = byteArrayOutputStream.toByteArray()
-        return Base64.encodeToString(byteArray,
-            Base64.DEFAULT)
-    }
-    private fun getApplicationIcon(context: Context, packageName: String): Drawable? {
-        return try {
-            context.packageManager.getApplicationIcon(packageName)
-        } catch (e: PackageManager.NameNotFoundException) {
-            Log.e("getApplicationIcon", "Package not found: $packageName", e)
-            null
-        }
     }
 
     private fun readTextFile(context: Context, filePath: String): String? {

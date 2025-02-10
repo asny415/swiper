@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestPermissionLauncher()
-        viewModel = MainViewModel(application)
+        viewModel = MainViewModel(application as App)
         au = ActivityUtils(this, viewModel!!)
         au!!.handleReceivedFile(intent)
         setContent {
@@ -120,6 +120,12 @@ class MainActivity : ComponentActivity() {
             }
             SwiperApp(gvm)
         }
+    }
+
+    override fun onNewIntent(intent:Intent) {
+        super.onNewIntent(intent)
+        Log.d(TAG, "new Intent:" + intent.getStringExtra("script"))
+        au!!.handleReceivedFile(intent)
     }
 
     private val requestNotificationPermissionLauncher =
@@ -285,12 +291,18 @@ fun Setting(gvm: GreetingDataModel, modifier: Modifier = Modifier) {
         }
 
         // 其他设置项示例
-        SettingCard(title = "通知设置") {
+        SettingCard(title = "一般设置") {
             SwitchSettingItem(
                 title = "通知声音",
                 description = "开启通知提示语音",
                 checked = gvm.readSettingSpeak(),
                 onChange = {gvm.saveSettingSpeak(it)}
+            )
+            SwitchSettingItem(
+                title = "导入",
+                description = "允许导入脚本",
+                checked = gvm.readSettingAllowImport(),
+                onChange = {gvm.saveSettingAllowImport(it)}
             )
         }
     }
@@ -369,7 +381,7 @@ fun Greeting(vm:GreetingDataModel, modifier: Modifier = Modifier) {
         if (vm.connected) {
             Column(modifier = Modifier.fillMaxSize().align(Alignment.TopEnd)) {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(vm.scripts) { item ->
+                    items(vm.scripts,key = { item -> item.getString("filename")} ) { item ->
                         MyListItem(item, onClick = {
                             vm.onClickItem(item)
                         }, onDeletedListener = {
@@ -428,7 +440,7 @@ fun GreetingPreview() {
     SwiperApp(GreetingDataModel(connected = true, pairPort = "1234",
         currentVolumn = 10,
         maxVolumn = 100,
-        selectedPage = remember { mutableStateOf("Home") },
+        selectedPage = remember { mutableStateOf("Setting") },
         scripts = List(1){listOf("""{
             |"name":"支付宝视频脚本",
             |"package": "test.test.test",
@@ -484,6 +496,7 @@ fun MyListItem(item: JSONObject, onClick: () -> Unit, onDeletedListener: () -> U
 
     // 监听滑动状态
     LaunchedEffect(dismissState.currentValue) {
+        Log.d(TAG, "LaunchedEffect dismissState.currentValue: ${dismissState.currentValue}")
         if (dismissState.isDismissed(DismissDirection.EndToStart)) {
             onDeletedListener()
         }

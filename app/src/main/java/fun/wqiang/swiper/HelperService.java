@@ -500,17 +500,13 @@ public class HelperService extends Service {
             safeQuit(false);
             return START_NOT_STICKY;
         }
-        base64png.observeForever(screenCaptureObserver);
-        currentPkg.observeForever(packageCheckObserver);
-        Log.d(TAG, "observe base64 and packname");
         createNotification();
         script = intent.getStringExtra("script");
         if (jsenv != null) {
             jsenv.close();
         }
-        jsenv = jsHelper.newJsEnv();
-        initRuntime();
-        goEvent(Event.Start, new JSONObject());
+        jsenv = jsHelper.newJsEnv(this);
+        jsenv.evaluate(script + "\n module.go()", "main.js");
         return START_NOT_STICKY;
     }
 

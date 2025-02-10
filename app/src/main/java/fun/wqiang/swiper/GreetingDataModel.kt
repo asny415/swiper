@@ -15,4 +15,6 @@ class GreetingDataModel(val connected: Boolean,
                         val onPair: (port: Int, pairCode: String) -> Unit = { _, _ -> },
                         val setVolumn: (int: Int) -> Unit = {},
                         val readSettingSpeak: () -> Boolean = { false },
-                        val saveSettingSpeak: (b: Boolean) -> Unit = {})
+                        val readSettingAllowImport: () -> Boolean = { false },
+                        val saveSettingSpeak: (b: Boolean) -> Unit = {},
+                        val saveSettingAllowImport: (b: Boolean) -> Unit = {},)
