@@ -21,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import io.github.muntashirakon.adb.AbsAdbConnectionManager;
 
 import com.shiqi.quickjs.JSContext;
+import com.shiqi.quickjs.JSString;
 import com.shiqi.quickjs.JSUndefined;
 
 public class HelperService extends Service {
@@ -86,11 +87,11 @@ public class HelperService extends Service {
                 if (jsValues[0] instanceof JSUndefined || jsValues[0] == null) {
                     mainFuture.complete("");
                 } else {
-                    mainFuture.complete(jsValues[0].toString());
+                    mainFuture.complete(jsValues[0].cast(JSString.class).getString());
                 }
                 return null;
             }));
-            jsenv.evaluate(script + "\n module.go().catch(finish).then(()=>launchPackage('fun.wqiang.swiper'))", "main.js");
+            jsenv.evaluate(script + "\n module.go().catch(finish).then(()=>launchPackage('fun.wqiang.swiper')).catch(finish)", "main.js");
             mainFuture.thenAccept(reason->{
                 Log.d(TAG, "运行终止: " + reason);
                 try {

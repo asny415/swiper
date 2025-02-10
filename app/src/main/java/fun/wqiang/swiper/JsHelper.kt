@@ -257,6 +257,7 @@ class JsHelper {
             val thisSeed = seed++
             jsenv.createJSPromise{ resolve, reject ->
                 promiseMap["cmd_$thisSeed"] = listOf(resolve,reject)
+                Log.d(TAG, "executing command: $cmd")
                 var runnable:Runnable? = null
                 runnable = Runnable{
                     try {
@@ -293,7 +294,7 @@ class JsHelper {
                         if (e.message == "Not connected to ADB." || e.message == "connect() must be called first"){
                             var connected = false
                             try {
-                                connected = manager.autoConnect(context.applicationContext, 5000)
+                                connected = manager.autoConnect(context.applicationContext, 3000)
                             } catch (e: AdbPairingRequiredException) {
                                 Log.e(TAG, "Error executing command", e)
                             } catch (e: Exception) {
@@ -301,10 +302,15 @@ class JsHelper {
                             }
                             if (!connected) {
                                 Log.d(TAG, "try connect to 5555!")
-                                connected = manager.connect(5555)
+                                try {
+                                    connected = manager.connect(5555)
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "try connect to 5555 failed!",e)
+                                }
                             }
                             if (!connected) {
                                 Log.e(TAG, "Error connect to ADB!")
+                                reject.invoke(jsenv.createJSNull(), Array<JSValue>(1) {jsenv.createJSString("无法连接到ADB")})
                             } else {
                                 Log.d(TAG, "connect to ADB success!")
                                 executor.submit(runnable)
@@ -312,14 +318,16 @@ class JsHelper {
                             }
                         }
                     }
-                    val cmd2write = "$cmd | sed 's/^/cmd_$thisSeed:/'\n"
-                    Log.d(TAG, "executing command: $cmd2write")
-                    val os = shellStream!!.openOutputStream()
-                    os.write(cmd2write.toByteArray(
-                        StandardCharsets.UTF_8))
-                    os.flush()
-                    os.write("\n".toByteArray(
-                        StandardCharsets.UTF_8))
+                    if (shellStream != null && !shellStream!!.isClosed) {
+                        val cmd2write = "$cmd | sed 's/^/cmd_$thisSeed:/'\n"
+                        Log.d(TAG, "executing command: $cmd2write")
+                        val os = shellStream!!.openOutputStream()
+                        os.write(cmd2write.toByteArray(
+                            StandardCharsets.UTF_8))
+                        os.flush()
+                        os.write("\n".toByteArray(
+                            StandardCharsets.UTF_8))
+                    }
                 }
                 executor.submit(runnable)
             }
