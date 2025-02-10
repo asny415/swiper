@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -25,7 +26,6 @@ class MainViewModel(val app: App) : AndroidViewModel(app) {
     val running = MutableLiveData<Boolean>()
     val connected = MutableLiveData<Boolean>()
     private val paired = MutableLiveData<Boolean>()
-    private val needPair = MutableLiveData<Boolean>()
     private val pairPort = MutableLiveData<Int>()
     private val scripts = MutableLiveData<List<JSONObject>>()
     private val manager:AbsAdbConnectionManager = AdbConnectionManager(getApplication())
@@ -57,22 +57,14 @@ class MainViewModel(val app: App) : AndroidViewModel(app) {
                 }
                 scriptsList.add(obj)
             }catch (e: Exception) {
+                Log.d(TAG, "exception when read script: $fileName, delete it")
+                File(app.filesDir, "scripts" + File.separator + fileName).delete()
                 e.printStackTrace()
             } finally {
                 jsenv.close()
             }
         }
         scripts.postValue(scriptsList)    }
-
-    private fun readCommonScript(context: Context): String {
-        val files = listMjsFiles(context, "scripts/common")
-        var result = ""
-        for (file in files) {
-            val filePath = "scripts/common/${file.name}"
-            result += readTextFile(context,filePath)+"\n"
-        }
-        return result
-    }
 
     private fun readTextFile(context: Context, filePath: String): String? {
         return try {

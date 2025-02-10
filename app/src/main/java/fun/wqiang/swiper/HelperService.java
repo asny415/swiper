@@ -42,6 +42,7 @@ public class HelperService extends Service {
         manager = AdbConnectionManager.getInstance(this);
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         jsHelper = ((App) getApplication()).getJsHelper();
+        createNotification();
         new Thread(() -> {
             try {
                 manager.autoConnect(HelperService.this,1000);
@@ -67,11 +68,6 @@ public class HelperService extends Service {
         }
     }
 
-    private void clearAllNotifications() {
-        assert notificationManager != null;
-        notificationManager.cancelAll();
-    }
-
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand called");
@@ -82,7 +78,6 @@ public class HelperService extends Service {
             }
             return START_NOT_STICKY;
         }
-        createNotification();
         String script = intent.getStringExtra("script");
         JSContext jsenv = jsHelper.newJsEnv(this);
         jsHelper.initGlobals(this, jsenv).thenAccept((a) -> {
@@ -98,7 +93,6 @@ public class HelperService extends Service {
             jsenv.evaluate(script + "\n module.go().catch(finish).then(closeTTS).then(()=>launchPackage('fun.wqiang.swiper'))", "main.js");
             mainFuture.thenAccept(reason->{
                 Log.d(TAG, "运行终止: " + reason);
-                clearAllNotifications();
                 jsenv.close();
             });
         });
@@ -133,6 +127,7 @@ public class HelperService extends Service {
 
         // 启动前台服务
         startForeground(NOTIFICATION_ID, notification);
+        Log.d(TAG, "createNotification called");
     }
 
     private void createNotificationChannel() {
