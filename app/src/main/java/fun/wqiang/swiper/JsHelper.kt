@@ -328,7 +328,7 @@ class JsHelper {
     private fun globalLog(jsenv: JSContext) {
         jsenv.globalObject.setProperty("log", jsenv.createJSFunction{ ctx, args ->
             val log = args[0].cast(JSString::class.java).string
-            Log.d(TAG, "Log from JS: $log")
+            Log.d("__JS_LOG__", log)
             ctx.createJSNull()
         })
         jsenv.evaluate("const console={log};", "console.js")
@@ -342,7 +342,11 @@ class JsHelper {
             t.schedule(object: TimerTask() {
                 override fun run() {
                     mainThreadHandler.post {
-                        cb.invoke(jsenv.createJSNull(), Array<JSValue>(0) { ctx.createJSNull() })
+                        try{
+                            cb.invoke(jsenv.createJSNull(), Array<JSValue>(0) { ctx.createJSNull() })
+                        } catch (e: Exception) {
+                            Log.d(TAG, "Error executing callback", e)
+                        }
                     }
                 }
             }, ms)
