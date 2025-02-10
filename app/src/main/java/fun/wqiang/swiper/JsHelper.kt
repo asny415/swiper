@@ -51,7 +51,12 @@ class JsHelper {
         globalLaunchPackage(context, jsenv)
         globalCheckRunning(context, jsenv)
         globalSwipeUp(context, jsenv)
+        globalScreenOCR(context, jsenv)
         startPendingProcess(context,jsenv)
+    }
+
+    private fun globalScreenOCR(context: Context, jsenv: JSContext) {
+        //TODO
     }
 
     private fun globalSwipeUp(context: Context, jsenv: JSContext) {
@@ -99,76 +104,77 @@ class JsHelper {
         val manager = AdbConnectionManager.getInstance(context.applicationContext)
         val executor = Executors.newFixedThreadPool(3)
         var shellStream: AdbStream? = null
-        jsenv.evaluate("const adbPromise={}", "adbPromise.js")
-        val adbShell = { ctx:JSContext, args:Array<JSValue> ->
+        val promiseMap:MutableMap<String, List<JSFunction>> = mutableMapOf();
+        jsenv.globalObject.setProperty("adb", jsenv.createJSFunction { ctx, args ->
             val cmd = args[0].cast(JSString::class.java).string;
             val thisSeed = seed++
-            var runnable:Runnable? = null
-            runnable = Runnable{
-                try {
-                    if (shellStream == null || shellStream!!.isClosed) {
-                        shellStream = manager.openStream(SHELL)
-                        Thread {
-                            try {
-                                val reader = shellStream!!.openInputStream().bufferedReader()
-                                var line: String? = reader.readLine()
-                                while (line != null) {
-                                    Log.d(TAG, "adb shell output: $line")
-                                    if (line.startsWith("cmd_")) {
-                                        val result = line.split(":", limit = 2)
-                                        mainThreadHandler.post({
-                                            jsenv.evaluate(
-                                                "log('${result[0]} -> ${result[1]}'); if (adbPromise['${result[0]}']) {adbPromise['${result[0]}'].resolve('${result[1]}'); delete adbPromise['${result[0]}'];}",
-                                                "adb.js"
-                                            )
-                                        })
+            jsenv.createJSPromise{ resolve, reject ->
+                promiseMap["cmd_$thisSeed"] = listOf(resolve,reject)
+                var runnable:Runnable? = null
+                runnable = Runnable{
+                    try {
+                        if (shellStream == null || shellStream!!.isClosed) {
+                            shellStream = manager.openStream(SHELL)
+                            Thread {
+                                try {
+                                    val reader = shellStream!!.openInputStream().bufferedReader()
+                                    var line: String? = reader.readLine()
+                                    while (line != null) {
+                                        Log.d(TAG, "adb shell output: $line")
+                                        if (line.startsWith("cmd_")) {
+                                            val result = line.split(":", limit = 2)
+                                            mainThreadHandler.post({
+                                                if (result[0] in promiseMap) {
+                                                    promiseMap[result[0]]!![0].invoke(jsenv.createJSNull(), Array<JSValue>(1) {
+                                                        ctx.createJSString(result[1])
+                                                    })
+                                                    promiseMap.remove(result[0])
+                                                }
+                                            })
+                                        }
+                                        line = reader.readLine()
                                     }
-                                    line = reader.readLine()
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error reading output", e)
                                 }
+                            }.start()
+                        }
+                    } catch (e:Exception) {
+                        Log.e("ADB", "Error executing command", e)
+                        if (e.message == "Not connected to ADB." || e.message == "connect() must be called first"){
+                            var connected = false
+                            try {
+                                connected = manager.autoConnect(context.applicationContext, 5000)
+                            } catch (e: AdbPairingRequiredException) {
+                                Log.e(TAG, "Error executing command", e)
                             } catch (e: Exception) {
-                                Log.e(TAG, "Error reading output", e)
+                                Log.e(TAG, "Error connect", e)
                             }
-                        }.start()
-                    }
-                } catch (e:Exception) {
-                    Log.e("ADB", "Error executing command", e)
-                    if (e.message == "Not connected to ADB." || e.message == "connect() must be called first"){
-                        var connected = false
-                        try {
-                            connected = manager.autoConnect(context.applicationContext, 5000)
-                        } catch (e: AdbPairingRequiredException) {
-                            Log.e(TAG, "Error executing command", e)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error connect", e)
-                        }
-                        if (!connected) {
-                            Log.d(TAG, "try connect to 5555!")
-                            connected = manager.connect(5555)
-                        }
-                        if (!connected) {
-                            Log.e(TAG, "Error connect to ADB!")
-                        } else {
-                            Log.d(TAG, "connect to ADB success!")
-                            executor.submit(runnable)
+                            if (!connected) {
+                                Log.d(TAG, "try connect to 5555!")
+                                connected = manager.connect(5555)
+                            }
+                            if (!connected) {
+                                Log.e(TAG, "Error connect to ADB!")
+                            } else {
+                                Log.d(TAG, "connect to ADB success!")
+                                executor.submit(runnable)
+                                return@Runnable
+                            }
                         }
                     }
-                    return@Runnable
+                    val cmd2write = "$cmd | sed 's/^/cmd_$thisSeed:/'\n"
+                    Log.d(TAG, "executing command: $cmd2write")
+                    val os = shellStream!!.openOutputStream()
+                    os.write(cmd2write.toByteArray(
+                        StandardCharsets.UTF_8))
+                    os.flush()
+                    os.write("\n".toByteArray(
+                        StandardCharsets.UTF_8))
                 }
-                val cmd2write = "$cmd | sed 's/^/cmd_$thisSeed:/'\n"
-                Log.d(TAG, "executing command: $cmd2write")
-                val os = shellStream!!.openOutputStream()
-                os.write(cmd2write.toByteArray(
-                    StandardCharsets.UTF_8))
-                os.flush()
-                os.write("\n".toByteArray(
-                    StandardCharsets.UTF_8))
+                executor.submit(runnable)
             }
-            executor.submit(runnable)
-            ctx.createJSString("cmd_$thisSeed")
-        }
-
-        jsenv.globalObject.setProperty("adbShell", jsenv.createJSFunction(adbShell))
-        jsenv.evaluate("function adb(cmd){ return new Promise((r,rj)=>{const id = adbShell(cmd); adbPromise[id]={resolve:r,reject:rj}})}", "adb.js")
+        })
     }
 
     private fun globalLog(context: Context, jsenv: JSContext) {
