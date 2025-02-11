@@ -216,7 +216,8 @@ class JsHelper {
         val cmdcap = "`screencap -p \${path} && echo \"\"`"
         jsenv.evaluate("""async function screenOCR(zone={}, path="/sdcard/swiper_screen_cap.png"){
             |await adb($cmdcap)
-            |return await ocr(path, zone)
+            |const result = await ocr(path, zone)
+            |return JSON.parse(result)
             |}""".trimMargin(), "ocr.js")
     }
 
@@ -402,10 +403,6 @@ class JsHelper {
             Log.e("JavaScriptEngine", "Failed to execute JavaScript code.", e)
         }
         return ""
-    }
-
-    fun getName(jsenv: JSContext, script: String): String {
-        return executeJavaScript(jsenv, "$script\n module.name")
     }
 
 }
