@@ -26,9 +26,11 @@
 
 打印到Logcat,TAG是 "\_\_JS_LOG\_\_"
 
-### async screenOCR()
+### async screenOCR(zone?={x,y,width,height})
 
 调用系统的OCR功能，返回 json 格式的文字识别结果。
+
+可以通过zone参数指定要识别的区域，默认区域是整个屏幕
 
 ### async delay(ms)
 

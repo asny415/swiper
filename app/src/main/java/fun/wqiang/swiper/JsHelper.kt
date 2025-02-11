@@ -2,6 +2,7 @@ package `fun`.wqiang.swiper
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
@@ -14,7 +15,9 @@ import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import com.shiqi.quickjs.JSContext
 import com.shiqi.quickjs.JSFunction
 import com.shiqi.quickjs.JSNumber
+import com.shiqi.quickjs.JSObject
 import com.shiqi.quickjs.JSString
+import com.shiqi.quickjs.JSUndefined
 import com.shiqi.quickjs.JSValue
 import com.shiqi.quickjs.QuickJS
 import `fun`.wqiang.swiper.TTSHelper.Companion.initTTS
@@ -135,9 +138,18 @@ class JsHelper {
 
     @SuppressLint("SdCardPath")
     private fun globalScreenOCR(jsenv: JSContext) {
-        jsenv.globalObject.setProperty("ocr", jsenv.createJSFunction { _, _ ->
+        jsenv.globalObject.setProperty("ocr", jsenv.createJSFunction { _, args ->
+            val path = args[0].cast(JSString::class.java).string
+            val zone = args[1].cast(JSObject::class.java)
             jsenv.createJSPromise { resolve, _ ->
-                val bitmap = BitmapFactory.decodeFile("/sdcard/swiper_screen_cap.png")
+                var bitmap = BitmapFactory.decodeFile(path)
+                if (!JSUndefined::class.isInstance(zone.getProperty("x"))) {
+                    val x = zone.getProperty("x").cast(JSNumber::class.java).int
+                    val y = zone.getProperty("y").cast(JSNumber::class.java).int
+                    val width = zone.getProperty("x").cast(JSNumber::class.java).int
+                    val height = zone.getProperty("y").cast(JSNumber::class.java).int
+                    bitmap = Bitmap.createBitmap(bitmap, x, y, width, height)
+                }
                 val result = JSONObject()
                 if (bitmap != null) {
                     val textRecognizer =
@@ -184,7 +196,7 @@ class JsHelper {
                         Log.e("TEST", "识别结束")
                             bitmap.recycle()
                             textRecognizer.close()
-                        File("/sdcard/swiper_screen_cap.png").delete()
+                        File(path).delete()
                             resolve.invoke(
                                 jsenv.createJSNull(),
                                 Array<JSValue>(1) { jsenv.createJSString(result.toString()) })
@@ -201,9 +213,10 @@ class JsHelper {
                 }
             }
         })
-        jsenv.evaluate("""async function screenOCR(){
-            |await adb("screencap -p /sdcard/swiper_screen_cap.png && echo \"\"")
-            |return await ocr()
+        val cmdcap = "`screencap -p \${path} && echo \"\"`"
+        jsenv.evaluate("""async function screenOCR(zone={}, path="/sdcard/swiper_screen_cap.png"){
+            |await adb($cmdcap)
+            |return await ocr(path, zone)
             |}""".trimMargin(), "ocr.js")
     }
 
