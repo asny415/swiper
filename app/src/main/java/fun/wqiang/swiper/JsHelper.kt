@@ -126,6 +126,7 @@ class JsHelper {
             globalLaunchPackage(jsenv)
             globalCheckRunning(jsenv)
             globalSwipeUp(jsenv)
+            globalClick(jsenv)
             globalScreenOCR(jsenv)
             startPendingProcess(jsenv)
             null
@@ -206,6 +207,9 @@ class JsHelper {
             |}""".trimMargin(), "ocr.js")
     }
 
+    private fun globalClick(jsenv: JSContext) {
+        jsenv.evaluate("function click(x, y) {adb(`input tap \${x} \${y} && echo \"\"`)}", "plugin.js")
+    }
     private fun globalSwipeUp(jsenv: JSContext) {
         val cmd = "`input swipe \${x1} \${y1} \${x2} \${y2} \${duration} && echo \"\"`"
         jsenv.evaluate("""
