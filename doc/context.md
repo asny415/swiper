@@ -42,7 +42,7 @@ adb命令语法糖，通过包名启动某个程序
 
 adb命令语法糖，检查前台正在运行的程序
 
-### swipeUp({x1,y1,x2,y2,duration})
+### async swipeUp({x1,y1,x2,y2,duration})
 
 adb 命令语法糖，无脑上划
 
