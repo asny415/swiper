@@ -43,7 +43,6 @@ public class HelperService extends Service {
         manager = AdbConnectionManager.getInstance(this);
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         jsHelper = ((App) getApplication()).getJsHelper();
-        createNotification();
         new Thread(() -> {
             try {
                 manager.autoConnect(HelperService.this,1000);
@@ -79,6 +78,7 @@ public class HelperService extends Service {
             }
             return START_NOT_STICKY;
         }
+        createNotification();
         String script = intent.getStringExtra("script");
         JSContext jsenv = jsHelper.newJsEnv(this);
         jsHelper.initGlobals(this, jsenv).thenAccept((a) -> {
@@ -94,6 +94,7 @@ public class HelperService extends Service {
             jsenv.evaluate(script + "\n module.go().catch(finish).then(()=>launchPackage('fun.wqiang.swiper')).catch(finish)", "main.js");
             mainFuture.thenAccept(reason->{
                 Log.d(TAG, "运行终止: " + reason);
+                stopForeground(true);
                 try {
                     jsenv.evaluate("closeTTS()", "cleanup.js");
                 } catch (Exception err) {
