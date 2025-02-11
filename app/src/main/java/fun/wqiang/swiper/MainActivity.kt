@@ -53,6 +53,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.Button
@@ -77,6 +78,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 //noinspection UsingMaterialAndMaterial3Libraries
 import androidx.compose.material.rememberDismissState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
@@ -96,6 +98,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
+import java.util.concurrent.CompletableFuture
 
 class MainActivity : ComponentActivity() {
     private var viewModel: MainViewModel? = null
@@ -159,6 +162,7 @@ class MainActivity : ComponentActivity() {
     }
     override fun onResume() {
         super.onResume()
+        Log.d(TAG, "onResume called")
         viewModel!!.refreshAllScripts()
         val intent = Intent(this, HelperService::class.java)
         intent.setAction(HelperService.ACTION_STOP)
@@ -293,8 +297,8 @@ fun Setting(gvm: GreetingDataModel, modifier: Modifier = Modifier) {
                 onChange = {gvm.saveSettingSpeak(it)}
             )
             SwitchSettingItem(
-                title = "导入",
-                description = "允许导入脚本",
+                title = "导入确认",
+                description = "导入脚本时弹出确认对话框",
                 checked = gvm.readSettingAllowImport(),
                 onChange = {gvm.saveSettingAllowImport(it)}
             )
@@ -372,10 +376,39 @@ fun Greeting(vm:GreetingDataModel, modifier: Modifier = Modifier) {
     var showDialog by remember { mutableStateOf(false) }
     var pairCode by remember { mutableStateOf("") }
     Box(contentAlignment = Alignment.Center, modifier=modifier.fillMaxSize()){
+        if (vm.showImportDialog.value) {
+            AlertDialog(
+                onDismissRequest = {vm.showImportDialog.value = false; vm.importDialogResult.value.complete(false) },
+                title = { Text("确认导入") },
+                text = { Text("导入恶意脚本可能会伤害您的手机，造成财产损失，请务必确定导入脚本的来源清楚。您确定要导入吗？") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            vm.showImportDialog.value = false
+                            vm.importDialogResult.value.complete(true)
+                        }
+                    ) {
+                        Text("确定")
+                    }
+                },
+                dismissButton = {
+                    Button(
+                        onClick = {
+                            vm.showImportDialog.value = false
+                            vm.importDialogResult.value.complete(false)
+                        }
+                    ) {
+                        Text("取消")
+                    }
+                },
+                shape = RoundedCornerShape(16.dp), // 圆角形状
+                tonalElevation = 8.dp // 阴影
+            )
+        }
         if (vm.connected) {
             Column(modifier = Modifier.fillMaxSize().align(Alignment.TopEnd)) {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(vm.scripts,key = { item -> item.getString("filename")} ) { item ->
+                    items(vm.scripts,key = { Math.random().toString()} ) { item ->
                         MyListItem(item, onClick = {
                             vm.onClickItem(item)
                         }, onDeletedListener = {
@@ -434,7 +467,9 @@ fun GreetingPreview() {
     SwiperApp(GreetingDataModel(connected = true, pairPort = "1234",
         currentVolumn = 10,
         maxVolumn = 100,
-        selectedPage = remember { mutableStateOf("Setting") },
+        showImportDialog = remember { mutableStateOf(true) } ,
+        importDialogResult = remember { mutableStateOf(CompletableFuture())} ,
+        selectedPage = remember { mutableStateOf("Home") },
         scripts = List(1){listOf("""{
             |"name":"支付宝视频脚本",
             |"package": "test.test.test",

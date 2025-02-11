@@ -10,20 +10,18 @@ import android.os.Handler
 import android.provider.OpenableColumns
 import android.speech.tts.TextToSpeech
 import android.util.Log
-import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.CompletableFuture
 
 @Suppress("DEPRECATION")
 class ActivityUtils(private val activity: MainActivity, private val viewModel: MainViewModel) {
+    private var lastVM: GreetingDataModel? = null
     var tts: TextToSpeech? = null
     private  val tAG = "ActivityUtils"
     private val pm = PrefereManager(activity)
@@ -34,27 +32,35 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
     }
 
     fun handleReceivedFile(intent: Intent?) {
-        if (!pm.readSettingAllowImport()) {
-            Log.d(TAG, "handleReceivedFile: not allow import")
-            return
-        }
         when (intent?.action) {
-            Intent.ACTION_VIEW -> handleSingleFile(intent.data)
+            Intent.ACTION_VIEW -> handleSingleFile(intent.data, false)
             Intent.ACTION_SEND -> handleSharedFile(intent)
         }
     }
 
     // 处理直接打开文件（ACTION_VIEW）
-    private fun handleSingleFile(uri: Uri?) {
+    private fun handleSingleFile(uri: Uri?, run: Boolean){
         uri ?: return
-        activity.lifecycleScope.launch(Dispatchers.IO) {
-            saveFileFromUri(uri)?.let { savedPath ->
-                activity.runOnUiThread {
-                    viewModel.refreshAllScripts()
-                    Toast.makeText(activity,
-                        "文件已保存至：$savedPath", Toast.LENGTH_LONG).show()
-
-                }
+        if (pm.readSettingAllowImport()) {
+            lastVM!!.importDialogResult.value = CompletableFuture()
+            lastVM!!.importDialogResult.value.thenAccept{allow->
+                Log.d(TAG, "import dialog result:$allow")
+                Handler().postDelayed({
+                    if (allow) {
+                        val savePath = saveFileFromUri(uri)
+                        if (savePath != null && run) {
+                            val code = File(savePath).readText(Charsets.UTF_8)
+                            runScript(code)
+                        }
+                    }
+                }, 1000)
+            }
+            lastVM!!.showImportDialog.value = true
+        } else {
+            val savePath = saveFileFromUri(uri)
+            if (savePath!=null && run) {
+                val code = File(savePath).readText(Charsets.UTF_8)
+                runScript(code)
             }
         }
     }
@@ -63,20 +69,12 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
     private fun handleSharedFile(intent: Intent) {
         val script = intent.getStringExtra("script")
         if (script?.isNotEmpty() == true) {
-            val jsHelper = JsHelper()
-            val jsenv = jsHelper.newJsEnv(activity)
-            val filename = jsHelper.getName(jsenv,script)
-            jsenv.close()
-            Log.d(TAG, "filename is:$filename")
-            File(activity.filesDir, "scripts" + File.separator + filename+".mjs").writeText(script)
-            viewModel.refreshAllScripts()
-            if (intent.getStringExtra("run") == "1") {
-                runScript(script)
-            }
+            Log.d(TAG, "script is:$script")
+            handleSingleFile(Uri.parse(script), intent.getStringExtra("run") == "1")
             return
         }
         (intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))?.let { uri ->
-            handleSingleFile(uri)
+            handleSingleFile(uri, false)
         }
     }
 
@@ -148,9 +146,11 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
         val audioManager = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
         val volumn = audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL)
-        return GreetingDataModel(connected, pairPort,
+        lastVM =  GreetingDataModel(connected, pairPort,
         currentVolumn = volumn,
         maxVolumn = maxVolume,
+        showImportDialog = remember { mutableStateOf(false) },
+        importDialogResult = remember { mutableStateOf(CompletableFuture()) },
         scripts = scripts, selectedPage = remember { mutableStateOf("Home") } ,
         onDeletedItem = { item ->
             unlinkFile(item.getString("filename"))
@@ -173,6 +173,7 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
         }, onPair = { port, pairCode ->
             viewModel.pair(port, pairCode)
         })
+        return lastVM!!
     }
 
     private fun runScript(code: String) {
