@@ -156,14 +156,15 @@ class JsHelper {
         jsenv.globalObject.setProperty("ocr", jsenv.createJSFunction { _, args ->
             val path = args[0].cast(JSString::class.java).string
             val zone = args[1].cast(JSObject::class.java)
-            jsenv.createJSPromise { resolve, _ ->
+            jsenv.createJSPromise { resolve, reject ->
                 try {
                     var bitmap = BitmapFactory.decodeFile(path)
                     if (!JSUndefined::class.isInstance(zone.getProperty("x"))) {
                         val x = zone.getProperty("x").cast(JSNumber::class.java).int
                         val y = zone.getProperty("y").cast(JSNumber::class.java).int
-                        val width = zone.getProperty("x").cast(JSNumber::class.java).int
-                        val height = zone.getProperty("y").cast(JSNumber::class.java).int
+                        val width = zone.getProperty("width").cast(JSNumber::class.java).int
+                        val height = zone.getProperty("height").cast(JSNumber::class.java).int
+                        Log.d(TAG, "范围识别: $x $y $width $height bitmap size: ${bitmap.width} ${bitmap.height}")
                         bitmap = Bitmap.createBitmap(bitmap, x, y, width, height)
                     }
                     val result = JSONObject()
@@ -229,6 +230,11 @@ class JsHelper {
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error executing callback", e)
+                    try{
+                        reject.invoke(jsenv.createJSNull(), Array<JSValue>(1) {jsenv.createJSString(e.message)})
+                    } catch (e:Exception) {
+                        //we can ignore this
+                    }
                 }
             }
         })
