@@ -51,8 +51,13 @@ class JsHelper {
     private fun globalGetApplicationIcon(context: Context, jsenv: JSContext) {
         jsenv.globalObject.setProperty("getApplicationIcon", jsenv.createJSFunction{ctx, args ->
             val pkg = args[0].cast(JSString::class.java).string
-            val b64 = CommonUtils.fetchPkgIconB64(context, pkg)
-            ctx.createJSString(b64)
+            try {
+                val b64 = CommonUtils.fetchPkgIconB64(context, pkg)
+                ctx.createJSString(b64)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting application icon", e)
+                ctx.createJSString("")
+            }
         })
     }
     private fun globalSay(context: Context, jsenv: JSContext):CompletableFuture<Void> {
@@ -62,8 +67,13 @@ class JsHelper {
         val pm = PrefereManager(context)
         jsenv.globalObject.setProperty(
             "closeTTS", jsenv.createJSFunction{ ctx, _ ->
-                if (tts != null) {
-                    TTSHelper.closeTTS(context, tts!!)
+                try {
+                    if (tts != null) {
+                        TTSHelper.closeTTS(context, tts!!)
+                    }
+
+                } catch (e:Exception) {
+                    Log.e(TAG, "Error closing TTS", e)
                 }
                 ctx.createJSNull()
             }
@@ -78,10 +88,14 @@ class JsHelper {
             val utteranceId = Date().toString()
             utterances[utteranceId] = CompletableFuture()
             if (tts != null) {
-                val ttsresult = tts!!.speak(text, TextToSpeech.QUEUE_ADD, null, utteranceId)
-                Log.d(TAG, "tts result:$ttsresult for text:$text")
-                if (ttsresult < 0) {
-                    return CompletableFuture.completedFuture(null)
+                try {
+                    val ttsresult = tts!!.speak(text, TextToSpeech.QUEUE_ADD, null, utteranceId)
+                    Log.d(TAG, "tts result:$ttsresult for text:$text")
+                    if (ttsresult < 0) {
+                        return CompletableFuture.completedFuture(null)
+                    }
+                }catch (e:Exception) {
+                    Log.e(TAG, "Error speaking text", e)
                 }
             }
             return utterances[utteranceId]
@@ -130,6 +144,7 @@ class JsHelper {
             globalCheckRunning(jsenv)
             globalSwipeUp(jsenv)
             globalClick(jsenv)
+            globalBack(jsenv)
             globalScreenOCR(jsenv)
             startPendingProcess(jsenv)
             null
@@ -142,74 +157,78 @@ class JsHelper {
             val path = args[0].cast(JSString::class.java).string
             val zone = args[1].cast(JSObject::class.java)
             jsenv.createJSPromise { resolve, _ ->
-                var bitmap = BitmapFactory.decodeFile(path)
-                if (!JSUndefined::class.isInstance(zone.getProperty("x"))) {
-                    val x = zone.getProperty("x").cast(JSNumber::class.java).int
-                    val y = zone.getProperty("y").cast(JSNumber::class.java).int
-                    val width = zone.getProperty("x").cast(JSNumber::class.java).int
-                    val height = zone.getProperty("y").cast(JSNumber::class.java).int
-                    bitmap = Bitmap.createBitmap(bitmap, x, y, width, height)
-                }
-                val result = JSONObject()
-                if (bitmap != null) {
-                    val textRecognizer =
-                        TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-                    val image = InputImage.fromBitmap(bitmap, 0)
-                    textRecognizer.process(image).addOnSuccessListener { text: Text ->
-                        try {
-                            result.put("width", image.width)
-                            result.put("height", image.height)
-                            val results = JSONArray()
-                            result.put("result", "succ")
-                            result.put("nodes", results)
-                            val textBlocks = text.textBlocks
-                            for (block in textBlocks) {
-                                // 获取文本块中的每一行
-                                val lines = block.lines
-                                for (line in lines) {
-                                    // 获取每一行的元素（单个字符）
-                                    val elements = line.elements
-                                    for (element in elements) {
-                                        // 获取每个字符的边界框
-                                        val elementBoundingBox = element.boundingBox
-                                        if (elementBoundingBox != null) {
-                                            val node = JSONObject()
-                                            node.put("text", element.text)
-                                            val bbox = JSONObject()
-                                            bbox.put("x", elementBoundingBox.left)
-                                            bbox.put("y", elementBoundingBox.top)
-                                            bbox.put("width", elementBoundingBox.width())
-                                            bbox.put("height", elementBoundingBox.height())
-                                            node.put("boundingBox", bbox)
-                                            results.put(node)
+                try {
+                    var bitmap = BitmapFactory.decodeFile(path)
+                    if (!JSUndefined::class.isInstance(zone.getProperty("x"))) {
+                        val x = zone.getProperty("x").cast(JSNumber::class.java).int
+                        val y = zone.getProperty("y").cast(JSNumber::class.java).int
+                        val width = zone.getProperty("x").cast(JSNumber::class.java).int
+                        val height = zone.getProperty("y").cast(JSNumber::class.java).int
+                        bitmap = Bitmap.createBitmap(bitmap, x, y, width, height)
+                    }
+                    val result = JSONObject()
+                    if (bitmap != null) {
+                        val textRecognizer =
+                            TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+                        val image = InputImage.fromBitmap(bitmap, 0)
+                        textRecognizer.process(image).addOnSuccessListener { text: Text ->
+                            try {
+                                result.put("width", image.width)
+                                result.put("height", image.height)
+                                val results = JSONArray()
+                                result.put("result", "succ")
+                                result.put("nodes", results)
+                                val textBlocks = text.textBlocks
+                                for (block in textBlocks) {
+                                    // 获取文本块中的每一行
+                                    val lines = block.lines
+                                    for (line in lines) {
+                                        // 获取每一行的元素（单个字符）
+                                        val elements = line.elements
+                                        for (element in elements) {
+                                            // 获取每个字符的边界框
+                                            val elementBoundingBox = element.boundingBox
+                                            if (elementBoundingBox != null) {
+                                                val node = JSONObject()
+                                                node.put("text", element.text)
+                                                val bbox = JSONObject()
+                                                bbox.put("x", elementBoundingBox.left)
+                                                bbox.put("y", elementBoundingBox.top)
+                                                bbox.put("width", elementBoundingBox.width())
+                                                bbox.put("height", elementBoundingBox.height())
+                                                node.put("boundingBox", bbox)
+                                                results.put(node)
+                                            }
                                         }
                                     }
                                 }
+                            } catch (e: JSONException) {
+                                throw RuntimeException(e)
                             }
-                        } catch (e: JSONException) {
-                            throw RuntimeException(e)
-                        }
-                    }.addOnFailureListener { e: Exception ->
+                        }.addOnFailureListener { e: Exception ->
                             // 处理错误
                             Log.e("TEST", "识别失败", e)
                         }.addOnCompleteListener {
-                        Log.e("TEST", "识别结束")
-                            bitmap.recycle()
-                            textRecognizer.close()
-                        File(path).delete()
+                            try {
+                                Log.e("TEST", "识别结束")
+                                bitmap.recycle()
+                                textRecognizer.close()
+                                File(path).delete()
+                                resolve.invoke(
+                                    jsenv.createJSNull(),
+                                    Array<JSValue>(1) { jsenv.createJSString(result.toString()) })
+                            } catch (e: Exception) {
+                                Log.e(TAG, "无法加载图像", e)
+                            }
+                        }
+                    } else {
+                            result.put("result", "无法加载图像")
                             resolve.invoke(
                                 jsenv.createJSNull(),
-                                Array<JSValue>(1) { jsenv.createJSString(result.toString()) })
-                        }
-                } else {
-                    try {
-                        result.put("result", "无法加载图像")
-                        resolve.invoke(
-                            jsenv.createJSNull(),
-                            Array<JSValue>(1) { jsenv.createJSObject(result) })
-                    } catch (e: JSONException) {
-                        Log.e(TAG, "无法加载图像", e)
+                                Array<JSValue>(1) { jsenv.createJSObject(result) })
                     }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error executing callback", e)
                 }
             }
         })
@@ -224,6 +243,10 @@ class JsHelper {
     private fun globalClick(jsenv: JSContext) {
         jsenv.evaluate("function click(x, y) {adb(`input tap \${x} \${y} && echo \"\"`)}", "plugin.js")
     }
+    private fun globalBack(jsenv: JSContext) {
+        jsenv.evaluate("function back() {adb(`input keyevent 4 && echo \"\"`)}", "plugin.js")
+    }
+
     private fun globalSwipeUp(jsenv: JSContext) {
         val cmd = "`input swipe \${x1} \${y1} \${x2} \${y2} \${duration} && echo \"\"`"
         jsenv.evaluate("""
