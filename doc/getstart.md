@@ -53,11 +53,11 @@ const module = {
 通过下面的命令将脚本直接保存在手机上，注意需将命令中的 "./alipay.js" 按照你的实际情况替换。
 
 ```shell
-adb -d shell am start -a android.intent.action.SEND -n fun.wqiang.swiper/.MainActivity -e "script" "'$(cat ./alipay.js)'"
+adb -d push ./test.js /sdcard/test.mjs && adb -d shell am start -a android.intent.action.SEND -n fun.wqiang.swiper/.MainActivity -e "script" "file:///sdcard/test.mjs"
 ```
 
 通过下面的命令直接在手机上运行脚本，注意需将命令中的 "./alipay.js" 按照你的实际情况替换。
 
 ```shell
-adb -d shell am start -a android.intent.action.SEND -n fun.wqiang.swiper/.MainActivity -e "script" "'$(cat ./alipay.js)'" -e "run" 1
+adb -d push ./test.js /sdcard/test.mjs && adb -d shell am start -a android.intent.action.SEND -n fun.wqiang.swiper/.MainActivity -e "script" "file:///sdcard/test.mjs" -e "run" 1
 ```
