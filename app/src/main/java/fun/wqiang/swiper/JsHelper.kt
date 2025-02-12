@@ -272,7 +272,7 @@ class JsHelper {
     }
 
     private fun globalCheckRunning(jsenv: JSContext) {
-        jsenv.evaluate("async function checkRunning() {const rsp = await adb(`dumpsys window | grep -E 'mCurrentFocus'`); return rsp.trim().split(` `)[2].split(`}`)[0].split(`/`) }", "plugin.js")
+        jsenv.evaluate("async function checkRunning() {const rsp = await adb(`dumpsys window | grep -E 'mCurrentFocus=W'`); return rsp.trim().split(` `)[2].split(`}`)[0].split(`/`) }", "plugin.js")
     }
 
     private fun startPendingProcess(jsenv: JSContext) {
