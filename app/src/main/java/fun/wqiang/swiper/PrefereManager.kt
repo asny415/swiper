@@ -24,13 +24,13 @@ class PrefereManager(val context: Context) {
 
     fun readSettingAllowImport(): Boolean {
         val sharedPreferences = context.getSharedPreferences("Swiper", Context.MODE_PRIVATE)
-        return sharedPreferences.getBoolean("allowImport", false)
+        return sharedPreferences.getBoolean("importAlert", true)
     }
 
     fun saveSettingAllowImport(value: Boolean) {
         val sharedPreferences = context.getSharedPreferences("Swiper", Context.MODE_PRIVATE)
         val editor = sharedPreferences.edit()
-        editor.putBoolean("allowImport", value)
+        editor.putBoolean("importAlert", value)
         editor.apply()
     }
 
