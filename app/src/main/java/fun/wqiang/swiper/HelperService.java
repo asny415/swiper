@@ -8,6 +8,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
 
@@ -16,13 +17,8 @@ import androidx.core.app.NotificationCompat;
 
 import java.io.IOException;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 
 import io.github.muntashirakon.adb.AbsAdbConnectionManager;
-
-import com.shiqi.quickjs.JSContext;
-import com.shiqi.quickjs.JSString;
-import com.shiqi.quickjs.JSUndefined;
 
 public class HelperService extends Service {
     private static final String TAG = "HelperService";
@@ -33,16 +29,14 @@ public class HelperService extends Service {
     private NotificationManager notificationManager;
     private AbsAdbConnectionManager manager;
 
-    private JsHelper jsHelper = null;
     public static final String ACTION_STOP="ACTION-STOP";
-    private CompletableFuture<String> mainFuture = null;
+    private JsRuntime js= null;
 
     @Override
     public void onCreate() {
         super.onCreate();
         manager = AdbConnectionManager.getInstance(this);
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        jsHelper = ((App) getApplication()).getJsHelper();
         new Thread(() -> {
             try {
                 manager.autoConnect(HelperService.this,1000);
@@ -70,40 +64,42 @@ public class HelperService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(TAG, "onStartCommand called");
         if (Objects.equals(intent.getAction(), ACTION_STOP)) {
-            if (mainFuture!=null) {
-                mainFuture.complete("用户中止");
-                mainFuture = null;
+            if (js != null) {
+                Log.d(TAG,"手动停止服务");
+                js.shutdown("用户停止");
+            }else {
+                Log.d(TAG, "没有什么服务好停止");
             }
             return START_NOT_STICKY;
         }
-        createNotification();
         String script = intent.getStringExtra("script");
-        JSContext jsenv = jsHelper.newJsEnv(this);
-        jsHelper.initGlobals(this, jsenv).thenAccept((a) -> {
-            mainFuture = new CompletableFuture<>();
-            jsenv.getGlobalObject().setProperty("finish", jsenv.createJSFunction((jsContext, jsValues) -> {
-                if (jsValues[0] instanceof JSUndefined || jsValues[0] == null) {
-                    mainFuture.complete("");
-                } else {
-                    mainFuture.complete(jsValues[0].cast(JSString.class).getString());
-                }
-                return null;
-            }));
-            jsenv.evaluate(script + "\n module.go().catch(finish).then(()=>launchPackage('fun.wqiang.swiper')).catch(finish)", "main.js");
-            mainFuture.thenAccept(reason->{
-                Log.d(TAG, "运行终止: " + reason);
-                stopForeground(true);
-                try {
-                    jsenv.evaluate("closeTTS()", "cleanup.js");
-                } catch (Exception err) {
-                    Log.e(TAG, "close TTS error", err);
-                }
-                jsenv.close();
-            });
-        });
+        if (script!=null) {
+            if (js != null) {
+                Log.d(TAG, "有老服务正在运行，等待停止");
+                js.wait().thenAccept(reason->
+                        new Handler().postDelayed(() -> startScript(script),1000));
+                js.shutdown("用户终止");
+            } else {
+                Log.d(TAG, "没有老服务正在运行，直接启动新服务");
+                startScript(script);
+            }
+        }
         return START_NOT_STICKY;
+    }
+
+    private void startScript(String script) {
+        Log.d(TAG, "启动前台服务，展示图标");
+        createNotification();
+        Log.d(TAG, "创建运行实例");
+        js = new JsRuntime(this);
+        js.wait().thenAccept(r->{
+            Log.d(TAG, "服务运行结束，关闭前台服务图标");
+            stopForeground(true);
+            Log.d(TAG, "清理运行实例");
+            js = null;
+        });
+        js.go(script);
     }
 
 

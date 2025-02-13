@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.io.File
 import java.io.FileOutputStream
 
-class MainViewModel(val app: App) : AndroidViewModel(app) {
+class MainViewModel(private val app: App) : AndroidViewModel(app) {
     private val executor = Executors.newFixedThreadPool(3)
     val running = MutableLiveData<Boolean>()
     val connected = MutableLiveData<Boolean>()
@@ -42,11 +42,10 @@ class MainViewModel(val app: App) : AndroidViewModel(app) {
         val mjsScripts = readAllScripts(app)
         val scriptsList = mutableListOf<JSONObject>()
         for ((fileName, code) in mjsScripts) {
-            val jsenv = app.jsHelper!!.newJsEnv(app)
+            val js = JsRuntime(app)
             try {
                 val obj = JSONObject(
-                    app.jsHelper!!.executeJavaScript(
-                        jsenv,
+                    js.executeString(
                         "$code\n JSON.stringify(Object.assign({name:'', icon:'', description:'no description'},module))"
                     )
                 )
@@ -61,7 +60,7 @@ class MainViewModel(val app: App) : AndroidViewModel(app) {
                 File(app.filesDir, "scripts" + File.separator + fileName).delete()
                 e.printStackTrace()
             } finally {
-                jsenv.close()
+                js.close()
             }
         }
         scripts.postValue(scriptsList)    }
@@ -121,8 +120,8 @@ class MainViewModel(val app: App) : AndroidViewModel(app) {
         }
     }
 
-    private fun listMjsFiles(context: Context, path: String): List<File> {
-        val targetDir = File(context.filesDir, path)
+    private fun listMjsFiles(context: Context): List<File> {
+        val targetDir = File(context.filesDir, "scripts")
 
         return when {
             // 检查目录是否存在
@@ -146,7 +145,7 @@ class MainViewModel(val app: App) : AndroidViewModel(app) {
 
     private fun readAllScripts(context: Context): Map<String, String> {
         val scripts = mutableMapOf<String, String>()
-        val files = listMjsFiles(context, "scripts")
+        val files = listMjsFiles(context)
         for (file in files) {
             scripts[file.name] = readTextFile(context, "scripts/" + file.name)!!
         }

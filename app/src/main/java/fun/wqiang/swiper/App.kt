@@ -8,13 +8,11 @@ import io.github.muntashirakon.adb.PRNGFixes
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 
 class App  : Application() {
-    var jsHelper: JsHelper? = null
 
     override fun onCreate() {
         super.onCreate()
         PRNGFixes.apply()
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true)
-        jsHelper = JsHelper()
     }
 
     override fun attachBaseContext(base: Context?) {

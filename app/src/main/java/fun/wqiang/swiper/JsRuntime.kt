@@ -35,17 +35,33 @@ import java.util.TimerTask
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 
-class JsHelper {
-    private var seed: Int = 10000
+class JsRuntime(val context: Context) {
     private var quickJS: QuickJS = QuickJS.Builder().build()
+    private val jsenv = quickJS.createJSRuntime().createJSContext()
+    private var seed: Int = 10000
+    private val completer  = CompletableFuture<String>()
     val mainThreadHandler = Handler(Looper.getMainLooper())
-    fun newJsEnv(context: Context) : JSContext {
-        val runtime = quickJS.createJSRuntime()
-        val jsenv = runtime.createJSContext()
+    val pendingTimer = Timer()
+    private var shutdownReason:String = ""
+    init {
         globalGetApplicationIcon(context, jsenv)
         globalGetScreenWidth(context,jsenv)
         globalGetScreenHeight(context,jsenv)
-        return jsenv
+    }
+
+    fun go(script:String) {
+        initGlobals().thenAccept{
+            jsenv.globalObject.setProperty("finish", jsenv.createJSFunction{ env, args ->
+                env.evaluate("closeTTS()", "closetts")
+                var reason = ""
+                if (args[0] is JSString) {
+                    reason = args[0].cast(JSString::class.java).string
+                }
+                completer.complete(reason)
+                env.createJSNull()
+            })
+            jsenv.evaluate("${script}\n module.go().then(finish).catch(finish)", "main.js")
+        }
     }
 
     private fun globalGetApplicationIcon(context: Context, jsenv: JSContext) {
@@ -131,10 +147,8 @@ class JsHelper {
         }
         return future
     }
-    fun initGlobals(
-        context: Context,
-        jsenv: JSContext
-    ) :CompletableFuture<Void> {
+    private fun initGlobals(
+    ): CompletableFuture<Void> {
         return globalSay(context, jsenv).thenApply {
             globalDelay(jsenv)
             globalSetTimeout(context, jsenv)
@@ -146,7 +160,7 @@ class JsHelper {
             globalClick(jsenv)
             globalBack(jsenv)
             globalScreenOCR(jsenv)
-            startPendingProcess(jsenv)
+            startPendingProcess()
             null
         }
     }
@@ -275,8 +289,7 @@ class JsHelper {
         jsenv.evaluate("async function checkRunning() {const rsp = await adb(`dumpsys window | grep -E 'mCurrentFocus=W'`); return rsp.trim().split(` `)[2].split(`}`)[0].split(`/`) }", "plugin.js")
     }
 
-    private fun startPendingProcess(jsenv: JSContext) {
-        val pendingTimer = Timer()
+    private fun startPendingProcess() {
         pendingTimer.schedule(object : TimerTask() {
             override fun run() {
                 mainThreadHandler.post {
@@ -300,6 +313,9 @@ class JsHelper {
         var shellStream: AdbStream? = null
         val promiseMap:MutableMap<String, List<JSFunction>> = mutableMapOf()
         jsenv.globalObject.setProperty("adb", jsenv.createJSFunction { ctx, args ->
+            if (shutdownReason.isNotEmpty()) {
+                throw Error(shutdownReason)
+            }
             val cmd = args[0].cast(JSString::class.java).string
             val thisSeed = seed++
             jsenv.createJSPromise{ resolve, reject ->
@@ -425,13 +441,25 @@ class JsHelper {
         })
     }
 
-    fun executeJavaScript(jsctx: JSContext, jsCode :String):String {
-        try {
-            return jsctx.evaluate(jsCode, "module.js", String::class.java).toString()
-        } catch (e :Exception) {
-            Log.e("JavaScriptEngine", "Failed to execute JavaScript code.", e)
-        }
-        return ""
+    fun wait():CompletableFuture<String> {
+        return completer
     }
+    fun shutdown(reason:String) {
+        if (completer.isDone) {
+            val realReason = completer.getNow(null)
+            Log.d(TAG, "运行终止: $reason 但是已经终止：${realReason}")
+            return
+        }
+        shutdownReason = reason
+    }
+
+    fun executeString(s: String): String {
+        return jsenv.evaluate(s, "module.js",String::class.java)
+    }
+
+    fun close() {
+        jsenv.close()
+    }
+
 
 }

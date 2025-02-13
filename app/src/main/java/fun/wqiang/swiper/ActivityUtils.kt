@@ -48,20 +48,24 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
                 Handler().postDelayed({
                     if (allow) {
                         val savePath = saveFileFromUri(uri)
+                        viewModel.refreshAllScripts()
                         if (savePath != null && run) {
                             val code = File(savePath).readText(Charsets.UTF_8)
                             runScript(code)
                         }
                     }
-                }, 1000)
+                }, 3000)
             }
             lastVM!!.showImportDialog.value = true
         } else {
-            val savePath = saveFileFromUri(uri)
-            if (savePath!=null && run) {
-                val code = File(savePath).readText(Charsets.UTF_8)
-                runScript(code)
-            }
+            //onResume 会停止服务运行
+            Handler().postDelayed({
+                val savePath = saveFileFromUri(uri)
+                if (savePath!=null && run) {
+                    val code = File(savePath).readText(Charsets.UTF_8)
+                    runScript(code)
+                }
+            }, 2000)
         }
     }
 
