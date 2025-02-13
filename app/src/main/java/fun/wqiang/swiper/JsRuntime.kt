@@ -52,7 +52,7 @@ class JsRuntime(val context: Context) {
     fun go(script:String) {
         initGlobals().thenAccept{
             jsenv.globalObject.setProperty("finish", jsenv.createJSFunction{ env, args ->
-                env.evaluate("closeTTS()", "closetts")
+                env.evaluate("closeTTS()", "clean.js")
                 var reason = ""
                 if (args[0] is JSString) {
                     reason = args[0].cast(JSString::class.java).string

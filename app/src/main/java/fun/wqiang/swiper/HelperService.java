@@ -97,6 +97,7 @@ public class HelperService extends Service {
             Log.d(TAG, "服务运行结束，关闭前台服务图标");
             stopForeground(true);
             Log.d(TAG, "清理运行实例");
+            js.close();
             js = null;
         });
         js.go(script);
