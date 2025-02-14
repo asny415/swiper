@@ -45,16 +45,16 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
             lastVM!!.importDialogResult.value = CompletableFuture()
             lastVM!!.importDialogResult.value.thenAccept{allow->
                 Log.d(TAG, "import dialog result:$allow")
-                Handler().postDelayed({
-                    if (allow) {
-                        val savePath = saveFileFromUri(uri)
+                if (allow) {
+                    val savePath = saveFileFromUri(uri)
+                    Handler().postDelayed({
                         viewModel.refreshAllScripts()
                         if (savePath != null && run) {
                             val code = File(savePath).readText(Charsets.UTF_8)
                             runScript(code)
                         }
-                    }
-                }, 3000)
+                    }, 2000)
+                }
             }
             lastVM!!.showImportDialog.value = true
         } else {
