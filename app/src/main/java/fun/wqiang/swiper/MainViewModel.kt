@@ -12,14 +12,12 @@ import io.github.muntashirakon.adb.AbsAdbConnectionManager
 import io.github.muntashirakon.adb.android.AdbMdns
 import io.github.muntashirakon.adb.android.AndroidUtils
 import org.json.JSONObject
-import java.io.IOException
+import java.io.File
 import java.net.InetAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import java.io.File
-import java.io.FileOutputStream
 
 class MainViewModel(private val app: App) : AndroidViewModel(app) {
     private val executor = Executors.newFixedThreadPool(3)
