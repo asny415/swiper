@@ -51,6 +51,7 @@ class JsRuntime(val context: Context) {
 
     fun go(script:String) {
         initGlobals().thenAccept{
+            Log.d(TAG, "init globals done")
             jsenv.globalObject.setProperty("finish", jsenv.createJSFunction{ env, args ->
                 env.evaluate("closeTTS()", "clean.js")
                 var reason = ""
@@ -60,7 +61,16 @@ class JsRuntime(val context: Context) {
                 completer.complete(reason)
                 env.createJSNull()
             })
-            jsenv.evaluate("${script}\n (async()=>{ await (module.go||()=>{})() })().then(()=>launchPackage('fun.wqiang.swiper')).then(finish).catch(finish)", "main.js")
+            val realRun = """
+$script
+if (!module.go) {
+    module.go = async ()=>{
+    }
+}
+module.go().then(async ()=>await launchPackage('fun.wqiang.swiper')).then(finish).catch(finish)
+"""
+            Log.d(TAG, "executing script: $realRun")
+            jsenv.evaluate(realRun, "main.js")
         }
     }
 
