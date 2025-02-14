@@ -24,6 +24,7 @@ android {
         versionName = "3.0"
         buildConfigField("String", "GIT_VERSION", "\"${getGitVersion()}\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        setProperty("archivesBaseName", "swiper-v$versionName-${getGitVersion()}")
     }
 
     buildTypes {
