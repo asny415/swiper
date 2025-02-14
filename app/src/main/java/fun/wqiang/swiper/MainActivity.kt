@@ -191,6 +191,8 @@ fun SwiperApp(gvm: GreetingDataModel) {
                     Text(localContext.getString(R.string.app_name), style = typography.headlineMedium)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("一站式脚本管理工具", style = typography.bodyLarge)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(gvm.version, style = typography.labelSmall)
                 }
 
                 // 抽屉项列表
@@ -467,9 +469,10 @@ fun GreetingPreview() {
     SwiperApp(GreetingDataModel(connected = true, pairPort = "1234",
         currentVolumn = 10,
         maxVolumn = 100,
-        showImportDialog = remember { mutableStateOf(true) } ,
+        version = "v3.0",
+        showImportDialog = remember { mutableStateOf(false) } ,
         importDialogResult = remember { mutableStateOf(CompletableFuture())} ,
-        selectedPage = remember { mutableStateOf("Home") },
+        selectedPage = remember { mutableStateOf("Setting       ") },
         scripts = List(1){listOf("""{
             |"name":"支付宝视频脚本",
             |"package": "test.test.test",

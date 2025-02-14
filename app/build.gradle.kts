@@ -4,6 +4,14 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+fun getGitVersion(): String {
+    val process = Runtime.getRuntime().exec("git rev-parse --short HEAD")
+    process.waitFor()
+    val reader = process.inputStream.bufferedReader()
+    val version = reader.readLine() ?: "unknown"
+    return version
+}
+
 android {
     namespace = "fun.wqiang.swiper"
     compileSdk = 35
@@ -14,7 +22,7 @@ android {
         35.also { targetSdk = it }
         versionCode = 5
         versionName = "3.0"
-
+        buildConfigField("String", "GIT_VERSION", "\"${getGitVersion()}\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -37,6 +45,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

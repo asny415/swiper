@@ -153,6 +153,7 @@ class ActivityUtils(private val activity: MainActivity, private val viewModel: M
         lastVM =  GreetingDataModel(connected, pairPort,
         currentVolumn = volumn,
         maxVolumn = maxVolume,
+            version= "v${BuildConfig.VERSION_NAME} build:${BuildConfig.GIT_VERSION}",
         showImportDialog = remember { mutableStateOf(false) },
         importDialogResult = remember { mutableStateOf(CompletableFuture()) },
         scripts = scripts, selectedPage = remember { mutableStateOf("Home") } ,
