@@ -80,43 +80,6 @@ class MainViewModel(private val app: App) : AndroidViewModel(app) {
         // 如果目录不存在则创建
         if (!targetDir.exists()) {
             targetDir.mkdirs()
-            copyAssetsRecursively(context.assets, "scripts", targetDir)
-        }
-    }
-
-    private fun copyAssetsRecursively(assetManager: android.content.res.AssetManager, assetPath: String, targetDir: File) {
-        try {
-            // 获取 assets 中的文件列表
-            val files = assetManager.list(assetPath)
-            if (files.isNullOrEmpty()) {
-                // 如果是文件则直接复制
-                assetManager.open(assetPath).use { input ->
-                    FileOutputStream(File(targetDir, assetPath.substringAfterLast('/'))).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            } else {
-                // 如果是目录则递归处理
-                for (file in files) {
-                    val srcPath = if (assetPath.isEmpty()) file else "$assetPath/$file"
-                    val destFile = File(targetDir, file)
-
-                    if (assetManager.list(srcPath)?.isNotEmpty() == true) {
-                        // 创建子目录并递归复制
-                        destFile.mkdirs()
-                        copyAssetsRecursively(assetManager, srcPath, destFile)
-                    } else {
-                        // 复制文件
-                        assetManager.open(srcPath).use { input ->
-                            FileOutputStream(destFile).use { output ->
-                                input.copyTo(output)
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (e: IOException) {
-            e.printStackTrace()
         }
     }
 

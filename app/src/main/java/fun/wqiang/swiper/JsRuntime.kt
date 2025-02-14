@@ -60,7 +60,7 @@ class JsRuntime(val context: Context) {
                 completer.complete(reason)
                 env.createJSNull()
             })
-            jsenv.evaluate("${script}\n (async()=>{ await module.go() })().then(()=>launchPackage('fun.wqiang.swiper')).then(finish).catch(finish)", "main.js")
+            jsenv.evaluate("${script}\n (async()=>{ await (module.go||()=>{})() })().then(()=>launchPackage('fun.wqiang.swiper')).then(finish).catch(finish)", "main.js")
         }
     }
 
