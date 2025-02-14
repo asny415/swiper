@@ -4,6 +4,9 @@
 
 ---
 
+[![一个简单通过JS控制Android手机的软件](https://img.youtube.com/vi/SMpmkeDoQeM/0.jpg)](https://www.youtube.com/watch?v=SMpmkeDoQeM)
+
+
 ## ✨ 特性
 
 - **使用灵活** 通过自定义脚本应对手机中各种可能出现的情况
